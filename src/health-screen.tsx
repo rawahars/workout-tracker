@@ -64,7 +64,7 @@ export function HealthScreen({ day: initialDay, onImport }: { day?: string; onIm
     {!status && <Button title={busy ? 'Checking connection…' : 'Retry connection check'} disabled={busy} variant="secondary" onPress={() => void run(async () => { setStatus(await healthStatus()); })} />}
     {status && !status.configured && <Card style={{ gap: 16 }}>
       <Label color={C.orange}>One-time server setup</Label>
-      <T style={{ lineHeight: 22 }}>Enable Google Health API and create an OAuth Web application client in Google Cloud. Add these values as secrets in the Cloudflare Worker:</T>
+      <T style={{ lineHeight: 22 }}>Enable Google Health API and create an OAuth Web application client in Google Cloud. In the Cloudflare Worker, open Settings → Variables and Secrets → Add. Choose Type: Secret (not Text), add each value below, then select Deploy:</T>
       {status.missingConfiguration.map(name => <T key={name} style={{ fontFamily: fonts.bold, fontSize: 12 }}>{name}</T>)}
       <Input label="Authorized OAuth redirect URI" value={status.redirectUri} editable={false} multiline />
       <Button title="Copy redirect URI" icon={Copy} variant="secondary" onPress={() => void run(async () => { await Clipboard.setStringAsync(status.redirectUri); nav.toast('Redirect URI copied'); })} />
