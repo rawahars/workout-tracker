@@ -1,0 +1,128 @@
+import { expect, test } from '@playwright/test';
+import { seedState } from '../src/seed';
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('tab', { name: 'Today tab' })).toBeVisible();
+});
+test('logs a freestyle workout, survives reload and appears in the calendar and progress', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('button', { name: 'Start freestyle workout' }).click();
+  await page.getByRole('button', { name: 'Add exercise', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search exercises' }).fill('Flat dumbbell');
+  await page.getByRole('button', { name: 'Select Flat dumbbell chest press' }).click();
+  await page.getByRole('textbox', { name: 'Flat dumbbell chest press set 1 kg', exact: true }).fill('12.5');
+  await page.getByRole('textbox', { name: 'Flat dumbbell chest press set 1 reps', exact: true }).fill('10');
+  await page.getByRole('checkbox', { name: 'Complete Flat dumbbell chest press set 1', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Complete Flat dumbbell chest press set 1', exact: true })).toBeChecked();
+  await page.reload();
+  await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Complete Flat dumbbell chest press set 1', exact: true })).toBeChecked();
+  await expect(page.getByRole('textbox', { name: 'Flat dumbbell chest press set 1 kg', exact: true })).toHaveValue('12.5');
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Finish workout', exact: true }).click();
+  await expect(page.getByText('Work recorded', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save as workout template' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('tab', { name: 'Calendar tab' }).click();
+  await expect(page.getByRole('button', { name: /View Freestyle workout/ })).toBeVisible();
+  await page.getByRole('tab', { name: 'Progress tab' }).click();
+  await expect(page.getByText('12.5 kg', { exact: true }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+test('reopens and logs offline after the app shell is installed', async ({ page, context }) => {
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) await new Promise<void>(resolve => navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true }));
+  });
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Today tab' })).toBeVisible();
+  await page.getByRole('button', { name: 'Start freestyle workout' }).click();
+  await page.getByRole('button', { name: 'Add exercise', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search exercises' }).fill('Plank');
+  await page.getByRole('button', { name: 'Select Plank', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Complete Plank set 1', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Complete Plank set 1', exact: true })).toBeChecked();
+  await page.reload();
+  await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Complete Plank set 1', exact: true })).toBeChecked();
+});
+test('keeps logging controls inside the iPhone viewport', async ({ page }) => {
+  await page.getByRole('button', { name: 'Start freestyle workout' }).click();
+  await page.getByRole('button', { name: 'Add exercise', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search exercises' }).fill('Flat dumbbell');
+  await page.getByRole('button', { name: 'Select Flat dumbbell chest press' }).click();
+  const field = page.getByRole('textbox', { name: 'Flat dumbbell chest press set 1 reps', exact: true });
+  const check = page.getByRole('checkbox', { name: 'Complete Flat dumbbell chest press set 1', exact: true });
+  for (const locator of [field, check]) {
+    const box = await locator.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
+});
+test('edits shared templates without duplicating them and filters the movement library', async ({ page }) => {
+  await page.getByRole('tab', { name: 'Routines tab' }).click();
+  await page.getByRole('button', { name: 'View The Foundation', exact: true }).click();
+  await page.getByRole('button', { name: 'View Upper body A', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit workout', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Workout name', exact: true }).fill('Upper A updated');
+  await page.getByRole('button', { name: 'Save workout', exact: true }).click();
+  await expect(page.getByText('Upper A updated', { exact: true }).last()).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('button', { name: 'View Strength essentials', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'View Upper A updated', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('tab', { name: 'Explore tab' }).click();
+  await page.getByRole('textbox', { name: 'Search exercises' }).fill('dead bug');
+  await expect(page.getByRole('button', { name: 'View Dead bug', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'View Flat dumbbell chest press', exact: true })).toHaveCount(0);
+});
+test('exports a valid versioned backup without credentials', async ({ page }) => {
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export backup', exact: true }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^FORM-.*\.json$/);
+  const stream = await file.createReadStream();
+  const buffers: Buffer[] = [];
+  for await (const chunk of stream!) buffers.push(chunk);
+  const backup = JSON.parse(Buffer.concat(buffers).toString('utf8'));
+  expect(backup.app).toBe('FORM');
+  expect(backup.version).toBe(1);
+  expect(backup.state.exercises.length).toBeGreaterThan(60);
+  expect(backup.state.settings).not.toHaveProperty('youtube-key');
+});
+test('restores a portable backup with an exercise image and rejects a broken backup', async ({ page }) => {
+  const state = structuredClone(seedState());
+  state.programs[0]!.name = 'Restored program';
+  state.exercises[0]!.image = 'portable_image';
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+  const backup = { app: 'FORM', version: 1, createdAt: new Date().toISOString(), state, images: { portable_image: png } };
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await (await chooser).setFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await expect(page.getByText('Backup preview', { exact: true })).toBeVisible();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Replace with this backup', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Today tab' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Routines tab' }).click();
+  await expect(page.getByRole('button', { name: 'View Restored program', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export backup', exact: true }).click();
+  const file = await download;
+  const stream = await file.createReadStream();
+  const buffers: Buffer[] = [];
+  for await (const chunk of stream!) buffers.push(chunk);
+  const restored = JSON.parse(Buffer.concat(buffers).toString('utf8'));
+  expect(Object.values(restored.images)).toContain(png);
+  expect(restored.state.exercises[0].image).not.toBe('portable_image');
+  const invalid = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await (await invalid).setFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{"version":99}') });
+  await expect(page.getByText(/not a valid FORM v1 backup/)).toBeVisible();
+});
