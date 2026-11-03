@@ -40,7 +40,7 @@ export function Label({ children, color = C.muted }: { children: React.ReactNode
   return <T style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase', color }}>{children}</T>;
 }
 export function Row({ children, style }: { children: React.ReactNode; style?: ViewStyle }) { return <View style={[s.row, style]}>{children}</View>; }
-export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) { return <View style={[s.card, style]}>{children}</View>; }
+export function Card({ children, style, testID }: { children: React.ReactNode; style?: ViewStyle; testID?: string }) { return <View testID={testID} style={[s.card, style]}>{children}</View>; }
 export function Button({ title, onPress, icon: Icon, variant = 'primary', disabled = false, small = false, testID }: {
   title: string; onPress: () => void; icon?: LucideIcon; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; disabled?: boolean; small?: boolean; testID?: string;
 }) {
@@ -70,10 +70,10 @@ export function Input({ label, style, ...props }: TextInputProps & { label?: str
     <TextInput accessibilityLabel={props.accessibilityLabel ?? label} placeholderTextColor="#738074" selectionColor={C.lime} {...props} style={[s.input, props.multiline && { minHeight: 90, textAlignVertical: 'top' }, style]} />
   </View>;
 }
-export function Sheet({ title, children, footer, scroll = true }: { title: string; children: React.ReactNode; footer?: React.ReactNode; scroll?: boolean }) {
+export function Sheet({ title, children, footer, scroll = true, headerRight }: { title: string; children: React.ReactNode; footer?: React.ReactNode; scroll?: boolean; headerRight?: React.ReactNode }) {
   const { close } = useNav();
   return <View style={{ flex: 1, backgroundColor: C.bg }}>
-    <Row style={s.sheetHeader}><IconButton icon={ChevronLeft} label="Back" onPress={close} /><T numberOfLines={1} style={{ flex: 1, fontFamily: fonts.display, fontSize: 20 }}>{title}</T><IconButton icon={X} label="Close" onPress={close} /></Row>
+    <Row style={s.sheetHeader}><IconButton icon={ChevronLeft} label="Back" onPress={close} /><T numberOfLines={1} style={{ flex: 1, fontFamily: fonts.display, fontSize: 20 }}>{title}</T>{headerRight}<IconButton icon={X} label="Close" onPress={close} /></Row>
     {scroll ? <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 22, gap: 18, paddingBottom: 40 }}>{children}</ScrollView> : children}
     {footer && <View style={{ padding: 18, borderTopWidth: 1, borderTopColor: C.line }}>{footer}</View>}
   </View>;
@@ -112,10 +112,10 @@ export const Artwork = memo(function Artwork({ exercise, size = 56 }: { exercise
 export function Stat({ value, label, color = C.text }: { value: string; label: string; color?: string }) {
   return <View style={{ flex: 1, gap: 5 }}><T style={{ fontFamily: fonts.display, fontSize: 27, color }}>{value}</T><T muted style={{ fontSize: 11 }}>{label}</T></View>;
 }
-export function SessionCard({ session, onPress }: { session: Session; onPress: () => void }) {
+export function SessionCard({ session, onPress, hideDate = false }: { session: Session; onPress: () => void; hideDate?: boolean }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={`View ${session.name}, ${session.day}`} onPress={onPress} style={({ pressed }) => [s.card, { gap: 13, opacity: pressed ? 0.7 : 1 }]}>
     <Row><View style={{ width: 4, height: 36, borderRadius: 4, backgroundColor: session.color }} /><View style={{ flex: 1, gap: 4 }}>
-      <T style={{ fontFamily: fonts.bold, fontSize: 16 }}>{session.name}</T><T muted style={{ fontSize: 11 }}>{shortDate(session.day)} · {session.programName ?? 'Freestyle / standalone'}</T>
+      <T style={{ fontFamily: fonts.bold, fontSize: 16 }}>{session.name}</T><T muted style={{ fontSize: 11 }}>{hideDate ? '' : `${shortDate(session.day)} · `}{session.programName ?? 'Freestyle / standalone'}</T>
     </View><Check size={18} color={session.color} /></Row>
     <Row style={{ gap: 18 }}><T muted style={{ fontSize: 12 }}>{Math.round((session.duration ?? 0) / 60)} min</T><T muted style={{ fontSize: 12 }}>{completedSets(session)} sets</T>{volume(session) > 0 && <T muted style={{ fontSize: 12 }}>{fmt(volume(session))} kg volume</T>}</Row>
   </Pressable>;

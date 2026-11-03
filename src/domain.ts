@@ -71,6 +71,7 @@ export function finishSession(state: State, now = Date.now()): State {
     ...state.active, endedAt: now,
     duration: Math.min(86400, Math.max(0, Math.round((now - state.active.startedAt) / 1000))),
     restEndsAt: undefined,
+    countdown: undefined,
   };
   return { ...state, sessions: [...state.sessions, session], active: null };
 }
@@ -91,6 +92,18 @@ export function weekDays(date = new Date()) {
 export function weeklySessions(state: State, date = new Date()) {
   const days = new Set(weekDays(date));
   return state.sessions.filter(s => days.has(s.day));
+}
+export function groupWorkouts(sessions: Session[], gapMinutes = 120) {
+  const groups: { day: string; sessions: Session[]; end: number }[] = [];
+  const ordered = [...sessions].sort((a, b) => a.day.localeCompare(b.day) || a.startedAt - b.startedAt);
+  for (const session of ordered) {
+    const end = Math.max(session.startedAt, session.endedAt ?? session.startedAt + (session.duration ?? 0) * 1000);
+    const group = groups.at(-1);
+    if (group && group.day === session.day && session.startedAt <= group.end + gapMinutes * 60000) {
+      group.sessions.push(session); group.end = Math.max(group.end, end);
+    } else groups.push({ day: session.day, sessions: [session], end });
+  }
+  return groups;
 }
 export function analyze(state: State) {
   const weekly = weeklySessions(state);

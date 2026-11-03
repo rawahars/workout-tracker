@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, Dumbbell, Flame, HeartPulse, Play, Plus, TrendingUp } from './icons';
 import { localDay } from './model';
-import { analyze, completedSets, fmt, shortDate, weekDays, weeklySessions, weekdayNames } from './domain';
+import { analyze, completedSets, fmt, groupWorkouts, shortDate, weekDays, weeklySessions, weekdayNames } from './domain';
 import { useStore } from './store';
 import { AnalysisExport, SessionScreen, launchWorkout } from './session-screens';
 import { WorkoutCard, WorkoutDetail } from './routine-screens';
@@ -17,6 +17,7 @@ export function TodayScreen() {
   const weekly = weeklySessions(state);
   const trained = new Set(weekly.map(s => s.day));
   const recent = [...state.sessions].sort((a, b) => b.day.localeCompare(a.day) || b.startedAt - a.startedAt).slice(0, 3);
+  const recentDays = [...new Set(recent.map(session => session.day))].map(day => ({ day, sessions: recent.filter(session => session.day === day) }));
   return <ScrollView contentContainerStyle={{ padding: 22, gap: 16, paddingBottom: 35 }}>
     <View style={{ gap: 8, marginBottom: 5 }}><Label color={C.lime}>{new Date().toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric' })}</Label><T style={{ fontFamily: fonts.display, fontSize: 36, lineHeight: 41 }}>Show up.{'\n'}Build momentum.</T></View>
     <Card style={{ padding: 17, gap: 17 }}>
@@ -42,9 +43,12 @@ export function TodayScreen() {
     </Hero>}
     {scheduled.length > 1 && scheduled.slice(1).map(w => <WorkoutCard key={w.id} workout={w} onPress={() => nav.open(<WorkoutDetail id={w.id} programId={program?.id} />)} />)}
     {(scheduled.length > 0 || state.active) && <Button title="Start freestyle workout" icon={Plus} variant="secondary" onPress={() => void safely(() => launchWorkout(undefined, nav), nav.toast)} />}
-    <Row style={{ gap: 10 }}><Card style={{ flex: 1, gap: 9 }}><TrendingUp color={C.purple} size={20} /><Stat label="Sessions this week" value={String(weekly.length)} /></Card><Card style={{ flex: 1, gap: 9 }}><Flame color={C.orange} size={20} /><Stat label="Minutes this week" value={fmt(Math.round(weekly.reduce((sum, s) => sum + (s.duration ?? 0), 0) / 60))} /></Card></Row>
+    <Row style={{ gap: 10 }}><Card style={{ flex: 1, gap: 9 }}><TrendingUp color={C.purple} size={20} /><Stat label="Workouts this week" value={String(groupWorkouts(weekly).length)} /></Card><Card style={{ flex: 1, gap: 9 }}><Flame color={C.orange} size={20} /><Stat label="Minutes this week" value={fmt(Math.round(weekly.reduce((sum, s) => sum + (s.duration ?? 0), 0) / 60))} /></Card></Row>
     <Section title="Recent sessions" />
-    {recent.length ? recent.map(session => <SessionCard key={session.id} session={session} onPress={() => nav.open(<SessionScreen id={session.id} />)} />) : <Empty title="Your next chapter starts here" description="Finish a workout to see your training history take shape." />}
+    {recent.length ? recentDays.map(group => <View key={group.day} testID={`recent-day-${group.day}`} style={{ gap: 10 }}>
+      <Label>{group.day === today ? 'Today' : shortDate(group.day)}</Label>
+      {group.sessions.map(session => <SessionCard key={session.id} session={session} hideDate onPress={() => nav.open(<SessionScreen id={session.id} />)} />)}
+    </View>) : <Empty title="Your next chapter starts here" description="Finish a workout to see your training history take shape." />}
   </ScrollView>;
 }
 function StartForDate({ day }: { day: string }) {

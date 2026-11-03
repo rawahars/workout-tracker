@@ -9,6 +9,7 @@ import { ExerciseDetail, ExercisePicker } from './exercise-screens';
 import { AddButton, Artwork, Button, C, Card, Clock, Empty, IconButton, Input, Label, Row, Sheet, Stat, T, buzz, confirm, fonts, safely, useClock, useNav } from './ui';
 import { cancelRestNotification, scheduleRestNotification } from './timer';
 import { HealthScreen } from './health-screen';
+import { CountdownBanner, CountdownScreen } from './countdown-screen';
 
 type Nav = ReturnType<typeof useNav>;
 export async function launchWorkout(workout: Workout | undefined, nav: Nav, day = localDay(), programId?: string) {
@@ -120,8 +121,9 @@ export function SessionScreen({ id }: { id?: string }) {
     nav.closeAll();
     nav.open(<SessionSummary id={sessionId!} />);
   }, nav.toast));
-  return <Sheet title={id ? 'Training log' : 'In your session'} scroll={false} footer={!id ? <Row><View style={{ flex: 1 }}><Label>Completed</Label><T style={{ fontFamily: fonts.display, fontSize: 22 }}>{completedSets(session)} <T muted>/ {totalSets(session)} sets</T></T></View><Button title="Finish workout" icon={CheckCheck} disabled={!completedSets(session)} onPress={finish} /></Row> : undefined}>
+  return <Sheet title={id ? 'Training log' : 'In your session'} scroll={false} headerRight={!id ? <IconButton icon={Clock3} label="Open workout timer" color={C.cyan} onPress={() => nav.open(<CountdownScreen />)} /> : undefined} footer={!id ? <Row><View style={{ flex: 1 }}><Label>Completed</Label><T style={{ fontFamily: fonts.display, fontSize: 22 }}>{completedSets(session)} <T muted>/ {totalSets(session)} sets</T></T></View><Button title="Finish workout" icon={CheckCheck} disabled={!completedSets(session)} onPress={finish} /></Row> : undefined}>
     {!id && session.restEndsAt && <RestTimer endsAt={session.restEndsAt} />}
+    {!id && <CountdownBanner />}
     <FlatList
       data={session.exercises} keyExtractor={e => e.id} keyboardShouldPersistTaps="handled"
       initialNumToRender={5} windowSize={5} contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 35 }}

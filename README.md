@@ -51,6 +51,10 @@ Keep the same production address when deploying updates. Local data belongs to t
 
 Every acknowledged edit is saved locally. Completed sessions keep snapshots, so template changes do not rewrite history. Return mode starts enabled and caps working sets at two.
 
+During an active workout, tap the clock icon to start a countdown. It can be paused, resumed or cleared and plays a short alarm on completion. Keep the app open and sound enabled; Safari may require another tap to enable audio after a reload. The remaining duration is preserved across reloads.
+
+Screens support browser Back and Safari's left-edge back gesture. Individual logs remain separate: the dashboard counts same-day sessions with a gap of at most 120 minutes as one workout, and Recent sessions uses small day headings.
+
 Use **Settings > Export backup** regularly. On iPhone, save through the share sheet to Google Drive or Files. Enable Drive in Files if needed. On another phone, open the same app address and choose **Restore backup**. Restoration replaces the current library and includes chosen images and unfinished sessions. Keys are excluded. Exported files contain your workout information and are not encrypted by FORM.
 
 Do not clear Safari website data without a backup. Persistent storage can be requested in Settings; the browser decides whether to grant it. A static host serves the app files, not your personal workout history.

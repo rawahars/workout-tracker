@@ -59,6 +59,11 @@ export const MetricsSchema = z.object({
   providerEndTime: z.string().datetime({ offset: true }).optional(),
   syncedAt: number.optional(),
 }).refine(value => !value.averageHeartRate || !value.maxHeartRate || value.maxHeartRate >= value.averageHeartRate, 'Maximum heart rate must be at least average');
+export const CountdownSchema = z.object({
+  id, durationSeconds: z.number().int().min(1).max(86400),
+  remainingMs: number.max(86400000), endsAt: number.optional(),
+  status: z.enum(['running', 'paused', 'finished']),
+}).refine(value => value.status !== 'running' || value.endsAt !== undefined, 'A running timer needs an end time');
 export const SessionSchema = z.object({
   id, name, day: DaySchema, startedAt: number,
   endedAt: number.optional(), duration: number.max(86400).optional(),
@@ -66,6 +71,7 @@ export const SessionSchema = z.object({
   color: z.string().regex(/^#[0-9a-f]{6}$/i), notes: text,
   exercises: z.array(SessionExerciseSchema).max(100),
   restEndsAt: number.optional(), metrics: MetricsSchema.optional(),
+  countdown: CountdownSchema.optional(),
 });
 export const StateSchema = z.object({
   schemaVersion: z.literal(1),
@@ -120,4 +126,5 @@ export type SessionExercise = z.infer<typeof SessionExerciseSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type State = z.infer<typeof StateSchema>;
 export type Metrics = z.infer<typeof MetricsSchema>;
+export type Countdown = z.infer<typeof CountdownSchema>;
 export type Tab = 'Today' | 'Routines' | 'Calendar' | 'Explore' | 'Progress';

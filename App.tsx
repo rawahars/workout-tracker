@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode, useEffect, useState } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,6 +17,8 @@ import { RestorePreview, SettingsScreen } from './src/settings-screen';
 import { initializePwa } from './src/pwa';
 import { refreshExerciseMedia } from './src/media-refresh';
 import { healthResultMessage } from './src/health-client';
+import { BackNavigation, installBackNavigation } from './src/back-navigation';
+import { CountdownAlarm } from './src/countdown-screen';
 import { Button, C, IconButton, Label, NavigationContext, Row, T, fonts, safely, useNav } from './src/ui';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
@@ -59,9 +61,19 @@ function Main() {
 function Application() {
   const [, setRevision] = useState(0);
   const [sheets, setSheets] = useState<{ id: string; node: ReactNode }[]>([]);
+  const sheetsRef = useRef(sheets);
+  const backNavigation = useRef<BackNavigation | undefined>(undefined);
   const [message, setMessage] = useState('');
   const [ready, setReady] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
+  useEffect(() => {
+    const controller = installBackNavigation(() => sheetsRef.current.map(sheet => sheet.id), depth => {
+      const next = sheetsRef.current.slice(0, depth);
+      sheetsRef.current = next;
+    }, () => setSheets(sheetsRef.current));
+    backNavigation.current = controller;
+    return () => { controller.dispose(); backNavigation.current = undefined; };
+  }, []);
   useEffect(() => { if (!message) return; const timer = setTimeout(() => setMessage(''), 5500); return () => clearTimeout(timer); }, [message]);
   useEffect(() => {
     void boot().then(() => {
@@ -72,18 +84,26 @@ function Application() {
     });
     void initializePwa().then(setOfflineReady).catch(() => setMessage('Offline setup could not finish. Open the app online once before using it offline.'));
   }, []);
+  const updateSheets = (change: (current: typeof sheets) => typeof sheets) => {
+    const next = change(sheetsRef.current);
+    sheetsRef.current = next;
+    if (backNavigation.current) backNavigation.current.sync();
+    else setSheets(next);
+  };
   const nav = {
-    open: (node: ReactNode) => setSheets(current => [...current, { id: uid(), node }]),
-    close: () => setSheets(current => current.slice(0, -1)),
-    closeAll: () => setSheets([]), toast: (text: string) => setMessage(text), offlineReady,
+    open: (node: ReactNode) => updateSheets(current => [...current, { id: uid(), node }]),
+    close: () => updateSheets(current => current.slice(0, -1)),
+    closeAll: () => updateSheets(() => []), toast: (text: string) => setMessage(text), offlineReady,
   };
   const toast = message ? <Pressable accessibilityRole="alert" onPress={() => setMessage('')} style={styles.toast}><T style={{ fontSize: 12, lineHeight: 19, flex: 1 }}>{message}</T><X color={C.muted} size={16} /></Pressable> : null;
   return <NavigationContext.Provider value={nav}>
     <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
       {!ready ? <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator color={C.lime} /></View> : bootFailure() ? <Recovery retry={() => setRevision(x => x + 1)} /> : <Main />}
+      {ready && !bootFailure() && <CountdownAlarm />}
       {!sheets.length && toast}
     </SafeAreaView>
-    <Modal visible={sheets.length > 0} animationType="slide" presentationStyle="fullScreen" onRequestClose={nav.close}>
+    {/* Web exit animations leave the focus trap active while underlying controls accept clicks. */}
+    <Modal visible={sheets.length > 0} animationType={Platform.OS === 'web' ? 'none' : 'slide'} presentationStyle="fullScreen" onRequestClose={nav.close}>
       <SafeAreaView style={styles.app} edges={['top', 'bottom']}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           {sheets.map((sheet, index) => <View key={sheet.id} style={{ flex: 1, display: index === sheets.length - 1 ? 'flex' : 'none' }}>{sheet.node}</View>)}
