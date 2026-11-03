@@ -14,7 +14,23 @@ Open `http://127.0.0.1:4173` on your computer. This is a local preview, not an i
 
 For development, use `npm run web`.
 
-## Install on your iPhone, free
+## Deploy from GitHub with Cloudflare Workers
+
+Connect this repository to a Worker named `workout-tracker`, then use:
+
+| Setting | Value |
+|---|---|
+| Production branch | `main` |
+| Root directory | Repository root |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Optional preview command | `npx wrangler preview` |
+
+`wrangler.jsonc` supplies the compatibility date, Worker name, and `dist` assets directory. `npm run deploy:check` validates deployment locally without uploading anything. No app API keys are needed to build or deploy.
+
+Open the deployed HTTPS address in Safari and select **Share > Add to Home Screen**. Keep the same production address for subsequent updates.
+
+## Alternative: upload to Cloudflare Pages
 
 1. Create a free Cloudflare account.
 2. Open **Workers & Pages > Create > Pages > Direct Upload**.

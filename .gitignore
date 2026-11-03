@@ -1,5 +1,6 @@
 node_modules/
 .expo/
+.wrangler/
 dist/
 dist-ios/
 coverage/
@@ -9,6 +10,8 @@ form-workout-web.zip
 *.tsbuildinfo
 .env
 .env.*
+.dev.vars
+.dev.vars.*
 !.env.example
 credentials.json
 *service-account*.json
