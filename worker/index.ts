@@ -49,9 +49,10 @@ function headers(cookies: string[] = []) {
 function json(value: unknown, status = 200, cookies: string[] = []) {
   return new Response(JSON.stringify(value), { status, headers: headers(cookies) });
 }
-function redirect(origin: string, outcome: string, cookies: string[] = []) {
+function redirect(origin: string, outcome: string, cookies: string[] = [], detail?: string) {
   const result = headers(cookies);
-  result.set('Location', `${origin}/?health=${outcome}`);
+  const query = new URLSearchParams({ health: outcome, ...(detail ? { health_error: detail } : {}) });
+  result.set('Location', `${origin}/?${query}`);
   return new Response(null, { status: 303, headers: result });
 }
 function clearCookies() {
@@ -87,6 +88,9 @@ async function exchange(env: Env, parameters: Record<string, string>) {
   });
   if (!response.ok) {
     if (data.error === 'invalid_grant') throw new ApiError(401, 'reconnect_required', 'Your Google connection expired or was revoked. Connect again.', true);
+    if (data.error === 'invalid_client' || data.error === 'unauthorized_client') throw new ApiError(503, 'oauth_client_rejected', 'Google rejected the OAuth client credentials. Check that the client ID and actual secret value belong to the same Web application client.');
+    if (data.error === 'redirect_uri_mismatch') throw new ApiError(503, 'oauth_redirect', 'The OAuth callback URI does not match the Web application client configuration.');
+    if (response.status === 429) throw new ApiError(429, 'rate_limited', 'Google is temporarily limiting authorization requests. Try again later.');
     throw new ApiError(503, 'oauth_configuration', 'Google authorization failed. Check the OAuth client settings in Cloudflare.');
   }
   if (!text(data.access_token)) throw new ApiError(502, 'provider_response', 'Google did not return an access token.');
@@ -101,6 +105,7 @@ async function google(accessToken: string, path: string, init?: RequestInit): Pr
   const reasons = Array.isArray(details) ? details.map(detail => record(detail).reason) : [];
   if (reasons.includes('ACCOUNT_NOT_LINKED')) throw new ApiError(409, 'account_not_linked', 'Link your Fitbit account in the Google Health mobile app, then connect again.');
   if (reasons.includes('SERVICE_DISABLED')) throw new ApiError(503, 'api_disabled', 'Enable Google Health API in the Google Cloud project that owns this OAuth client.');
+  if (reasons.includes('BILLING_DISABLED') || reasons.includes('BILLING_NOT_ACTIVE')) throw new ApiError(403, 'billing_required', 'Google reports that billing is required. Leave billing disabled and use manual metrics instead.');
   if (response.status === 401) throw new ApiError(401, 'reconnect_required', 'Your Google connection is no longer authorized. Connect again.', true);
   if (response.status === 403) throw new ApiError(403, 'permissions_required', 'Google did not grant access to this data. Reconnect and review the requested permissions.');
   if (response.status === 404) throw new ApiError(404, 'workout_not_found', 'This workout is no longer available from Google Health.');
@@ -144,23 +149,34 @@ async function callback(request: Request, env: Env) {
   if (!flow || flow.expiresAt <= Date.now() || flow.redirectUri !== `${url.origin}${HEALTH_CALLBACK}` || !sameToken(flow.state, state)) return redirect(url.origin, 'state', expired);
   if (url.searchParams.has('error')) return redirect(url.origin, 'denied', expired);
   const code = url.searchParams.get('code');
-  if (!code || code.length > 4096) return redirect(url.origin, 'failed', expired);
+  if (!code || code.length > 4096) return redirect(url.origin, 'failed', expired, 'authorization_code');
+  let stage: 'token' | 'identity' | 'session' = 'token';
   try {
     const token = await exchange(env, { code, grant_type: 'authorization_code', redirect_uri: flow.redirectUri, code_verifier: flow.verifier });
     const scopes = granted(token.scope, [...HEALTH_SCOPES]);
     if (!scopes.length) return redirect(url.origin, 'permissions', expired);
+    stage = 'identity';
     const identity = await google(token.access_token as string, 'identity');
-    if (!text(identity.healthUserId)) throw new ApiError(409, 'account_not_linked', 'Link your Google account to Google Health first.');
+    if (!text(identity.healthUserId)) return redirect(url.origin, 'failed', expired, 'identity_missing');
     const refreshToken = text(token.refresh_token);
-    if (!refreshToken) return redirect(url.origin, 'failed', expired);
+    if (!refreshToken) return redirect(url.origin, 'failed', expired, 'offline_access');
     const lifetime = numeric(token.refresh_token_expires_in, 1, 366 * 86400);
     const auth: Auth = {
       refreshToken, scopes, expiresAt: Date.now() + MAX_SESSION * 1000,
       refreshExpiresAt: lifetime === undefined ? undefined : Date.now() + lifetime * 1000,
     };
+    stage = 'session';
     return redirect(url.origin, 'connected', [...expired, await authCookie(auth, env)]);
   } catch (error) {
-    return redirect(url.origin, error instanceof ApiError && error.code === 'account_not_linked' ? 'unlinked' : 'failed', expired);
+    const outcomes: Record<string, string> = {
+      account_not_linked: 'unlinked', oauth_client_rejected: 'oauth_client',
+      oauth_redirect: 'oauth_redirect', oauth_configuration: 'oauth_configuration',
+      api_disabled: 'api_disabled', billing_required: 'billing_required',
+      rate_limited: 'rate_limited', provider_unavailable: 'provider_unavailable',
+      permissions_required: 'identity_denied',
+    };
+    const outcome = error instanceof ApiError ? outcomes[error.code] ?? (stage === 'token' && error.code === 'reconnect_required' ? 'authorization_code' : `${stage}_failed`) : `${stage}_failed`;
+    return outcome === 'unlinked' ? redirect(url.origin, 'unlinked', expired) : redirect(url.origin, 'failed', expired, outcome);
   }
 }
 async function readBody(request: Request): Promise<Json> {

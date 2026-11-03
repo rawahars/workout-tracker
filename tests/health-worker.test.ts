@@ -32,6 +32,11 @@ function post(path: string, body: unknown, authCookie: string, requestOrigin = o
   return request(path, { method: 'POST', headers: { Origin: requestOrigin, Cookie: authCookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 const range = { day: '2026-11-03', startTime: '2026-11-02T18:30:00Z', endTime: '2026-11-03T18:30:00Z' };
+async function attemptCallback() {
+  const begin = await worker.fetch(request('connect'), env);
+  const state = new URL(begin.headers.get('Location')!).searchParams.get('state');
+  return worker.fetch(request(`callback?code=fixture&state=${state}`, { headers: { Cookie: begin.headers.getSetCookie()[0]!.split(';')[0]! } }), env);
+}
 function token(scopes: readonly string[] = HEALTH_SCOPES) {
   return { access_token: accessToken, refresh_token: refreshToken, scope: scopes.join(' '), refresh_token_expires_in: 604800 };
 }
@@ -58,6 +63,37 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Google Health authorization', () => {
+  it.each([
+    ['invalid_client', 'oauth_client'],
+    ['unauthorized_client', 'oauth_client'],
+    ['invalid_grant', 'authorization_code'],
+    ['redirect_uri_mismatch', 'oauth_redirect'],
+  ])('reports a safe callback reason for %s without exposing provider descriptions', async (providerError, expected) => {
+    upstream.mockResolvedValueOnce(json({ error: providerError, error_description: 'private-provider-description' }, 400));
+    const response = await attemptCallback();
+    const location = new URL(response.headers.get('Location')!);
+    expect(location.searchParams.get('health')).toBe('failed');
+    expect(location.searchParams.get('health_error')).toBe(expected);
+    expect(location.href).not.toContain('private-provider-description');
+    expect(location.href).not.toContain(env.GOOGLE_HEALTH_CLIENT_SECRET);
+    expect(response.headers.getSetCookie().some(value => value.startsWith(`${SESSION_COOKIE}=`))).toBe(false);
+  });
+  it.each([
+    ['SERVICE_DISABLED', 'api_disabled'],
+    ['BILLING_DISABLED', 'billing_required'],
+    ['ACCESS_TOKEN_SCOPE_INSUFFICIENT', 'identity_denied'],
+  ])('distinguishes a denied Health identity check: %s', async (reason, expected) => {
+    upstream.mockImplementation(async (input: string, init?: RequestInit) => input.endsWith('/identity') ? json({ error: { details: [{ reason }], message: 'private-provider-description' } }, 403) : mockGoogle(input, init));
+    const response = await attemptCallback();
+    const location = new URL(response.headers.get('Location')!);
+    expect(location.searchParams.get('health_error')).toBe(expected);
+    expect(location.href).not.toContain('private-provider-description');
+  });
+  it('distinguishes successful authorization without an offline refresh token', async () => {
+    upstream.mockImplementation(async (input: string, init?: RequestInit) => input === 'https://oauth2.googleapis.com/token' ? json({ access_token: accessToken, scope: HEALTH_SCOPES.join(' ') }) : mockGoogle(input, init));
+    const response = await attemptCallback();
+    expect(new URL(response.headers.get('Location')!).searchParams.get('health_error')).toBe('offline_access');
+  });
   it('keeps the app available and reports missing server setup without exposing credentials', async () => {
     const empty = { ASSETS: env.ASSETS };
     const response = await worker.fetch(request('status'), empty);
@@ -165,6 +201,7 @@ describe('read-only wearable data', () => {
     expect(body.workouts).toHaveLength(1);
     const requests = upstream.mock.calls.filter(call => call[0].includes('health.googleapis.com'));
     for (const [url, init] of requests) {
+      expect(init.headers.Authorization).toBe(`Bearer ${accessToken}`);
       if (url.includes(':rollUp')) {
         expect(JSON.parse(init.body)).toMatchObject({ range: { startTime: range.startTime, endTime: range.endTime }, dataSourceFamily: 'users/me/dataSourceFamilies/google-wearables' });
       } else {

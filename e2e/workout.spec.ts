@@ -101,6 +101,18 @@ test('keeps logging controls inside the iPhone viewport', async ({ page }) => {
 });
 test.describe('Google Health', () => {
   test.use({ serviceWorkers: 'block' });
+  test('keeps a safe OAuth failure visible in the Health screen after the redirect URL is cleared', async ({ page }) => {
+    await page.route('**/api/health/status', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      configured: true, connected: false, scopes: [], redirectUri: 'https://form.example/api/health/callback', missingConfiguration: [],
+    }) }));
+    await page.goto('/?health=failed&health_error=oauth_client');
+    await expect(page.getByRole('tab', { name: 'Today tab' })).toBeVisible();
+    await expect.poll(() => new URL(page.url()).search).toBe('');
+    await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Open Google Health', exact: true }).click();
+    await expect(page.getByTestId('health-connection-error').getByText(/OAUTH_CLIENT_REJECTED/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Connect Google Health', exact: true })).toBeVisible();
+  });
   test('shows server setup without asking for secrets in the browser', async ({ page }) => {
     await page.route('**/api/health/status', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
       configured: false, connected: false, scopes: [], redirectUri: 'https://form.example/api/health/callback',

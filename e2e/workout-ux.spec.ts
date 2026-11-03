@@ -93,13 +93,15 @@ test('countdown pauses, rings once, and survives reload without losing the sessi
   await page.clock.fastForward(5000);
   await expect(display).toHaveText(paused);
   await page.getByRole('button', { name: 'Resume countdown', exact: true }).click();
-  await page.clock.fastForward(2000);
+  await expect(page.getByRole('button', { name: 'Pause countdown', exact: true })).toBeVisible();
+  await page.clock.resume();
   await expect(display.getByText('Time is up', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __timerBeeps: number }).__timerBeeps)).toBe(3);
   await page.clock.fastForward(5000);
   expect(await page.evaluate(() => (window as unknown as { __timerBeeps: number }).__timerBeeps)).toBe(3);
   await page.getByRole('textbox', { name: 'Seconds', exact: true }).fill('30');
   await page.getByRole('button', { name: 'Start new countdown', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause countdown', exact: true })).toBeVisible();
   await page.clock.resume();
   await page.reload();
   await page.getByRole('button', { name: 'Resume workout', exact: true }).click();

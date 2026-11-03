@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import { CloudDownload, Copy, HeartPulse, RefreshCw, ShieldCheck } from './icons';
 import { DaySchema, Metrics, localDay } from './model';
 import { ACTIVITY_SCOPE, HEART_SCOPE, HealthOverview, HealthStatus, HealthWorkoutMetrics } from './health-contract';
-import { connectHealth, disconnectHealth, HealthClientError, healthOverview, healthStatus, healthWorkout } from './health-client';
+import { connectHealth, disconnectHealth, HealthClientError, healthConnectionError, healthOverview, healthStatus, healthWorkout } from './health-client';
 import { fmt } from './domain';
 import { Button, C, Card, Empty, Input, Label, Row, Section, Sheet, Stat, T, confirm, errorMessage, fonts, useNav } from './ui';
 
@@ -25,7 +25,7 @@ export function HealthScreen({ day: initialDay, onImport }: { day?: string; onIm
   const [overview, setOverview] = useState<HealthOverview>();
   const [selected, setSelected] = useState<HealthWorkoutMetrics>();
   const [busy, setBusy] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(healthConnectionError() ?? '');
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -60,7 +60,7 @@ export function HealthScreen({ day: initialDay, onImport }: { day?: string; onIm
       <T muted style={{ lineHeight: 21 }}>Read-only access to workouts, heart rate and steps after your watch syncs. No live heart-rate streaming.</T>
       <Row><ShieldCheck size={17} color={C.lime} /><T muted style={{ flex: 1, fontSize: 12 }}>Google tokens are not stored in app data or backups.</T></Row>
     </Card>
-    {!!error && <Card style={{ borderColor: `${C.danger}66` }}><T style={{ color: C.danger, lineHeight: 22 }}>{error}</T></Card>}
+    {!!error && <Card testID="health-connection-error" style={{ borderColor: `${C.danger}66` }}><T style={{ color: C.danger, lineHeight: 22 }}>{error}</T></Card>}
     {!status && <Button title={busy ? 'Checking connection…' : 'Retry connection check'} disabled={busy} variant="secondary" onPress={() => void run(async () => { setStatus(await healthStatus()); })} />}
     {status && !status.configured && <Card style={{ gap: 16 }}>
       <Label color={C.orange}>One-time server setup</Label>
