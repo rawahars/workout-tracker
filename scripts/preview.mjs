@@ -8,6 +8,10 @@ const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': '
 http.createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
+    if (pathname === '/index.html') {
+      response.writeHead(307, { Location: '/', 'Cache-Control': 'no-cache' }).end();
+      return;
+    }
     let file = path.resolve(root, `.${pathname}`);
     if (file !== root && !file.startsWith(`${root}${path.sep}`)) { response.writeHead(403).end(); return; }
     if ((await stat(file)).isDirectory()) file = path.join(file, 'index.html');

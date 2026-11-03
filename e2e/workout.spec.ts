@@ -49,6 +49,23 @@ test('reopens and logs offline after the app shell is installed', async ({ page,
   await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Complete Plank set 1', exact: true })).toBeChecked();
 });
+test('caches a non-redirected root document on canonical HTML hosts', async ({ page, request }) => {
+  const redirect = await request.get('/index.html', { maxRedirects: 0 });
+  expect([301, 302, 307, 308]).toContain(redirect.status());
+  expect(redirect.headers().location).toBe('/');
+  const cached = await page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.ready;
+    for (const name of await caches.keys()) {
+      if (!name.startsWith('form-shell-')) continue;
+      const response = await (await caches.open(name)).match(registration.scope);
+      if (response) return { status: response.status, redirected: response.redirected };
+    }
+    return null;
+  });
+  expect(cached).toEqual({ status: 200, redirected: false });
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Today tab' })).toBeVisible();
+});
 test('keeps logging controls inside the iPhone viewport', async ({ page }) => {
   await page.getByRole('button', { name: 'Start freestyle workout' }).click();
   await page.getByRole('button', { name: 'Add exercise', exact: true }).click();

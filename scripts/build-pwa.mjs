@@ -25,8 +25,13 @@ async function files(dir) {
 const all = (await files(root)).filter(file => !file.endsWith('.map') && !file.endsWith('sw.js') && !path.basename(file).startsWith('_headers'));
 const hash = createHash('sha256');
 for (const file of all) hash.update(await readFile(file));
+hash.update(await readFile(new URL(import.meta.url)));
 const version = hash.digest('hex').slice(0, 16);
-const urls = all.map(file => path.relative(root, file).split(path.sep).join('/'));
+const urls = all.map(file => {
+  const relative = path.relative(root, file).split(path.sep).join('/');
+  // Cloudflare redirects index.html to the directory URL; cached navigation must not be redirected.
+  return relative === 'index.html' ? './' : relative;
+});
 await writeFile(path.join(root, 'sw.js'), `
 const CACHE = 'form-shell-${version}';
 const FILES = ${JSON.stringify(urls)};
@@ -39,7 +44,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(caches.open(CACHE).then(async cache => {
-    const request = event.request.mode === 'navigate' ? new URL('index.html', self.registration.scope).href : event.request;
+    const request = event.request.mode === 'navigate' ? self.registration.scope : event.request;
     return await cache.match(request) || fetch(event.request);
   }));
 });
