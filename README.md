@@ -2,8 +2,6 @@
 
 An offline-first workout tracker for your iPhone Home Screen.
 
-**Cost policy:** Do not enable billing, link payment accounts, upgrade plans, or add paid services for this project. If an integration requires billing, leave it disabled.
-
 ## Run locally
 
 ```powershell
