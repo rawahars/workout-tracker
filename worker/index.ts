@@ -74,8 +74,10 @@ async function readAuth(request: Request, env: Env): Promise<Auth | undefined> {
 }
 async function fetchJson(url: string, init?: RequestInit): Promise<{ response: Response; data: Json }> {
   let response: Response;
-  try { response = await fetch(url, { ...init, signal: AbortSignal.timeout(15000), redirect: 'error' }); }
+  // Workers supports manual/follow only; never forward credentials through redirects.
+  try { response = await fetch(url, { ...init, signal: AbortSignal.timeout(15000), redirect: 'manual' }); }
   catch { throw new ApiError(503, 'provider_unavailable', 'Google Health could not be reached. Try again after syncing your Fitbit.'); }
+  if (response.status >= 300 && response.status < 400) throw new ApiError(502, 'provider_response', 'Google returned an unexpected redirect. Try again later.');
   let data: Json;
   try { data = record(await response.json()); }
   catch { throw new ApiError(502, 'provider_response', 'Google Health returned an unreadable response. Try again later.'); }
@@ -309,7 +311,7 @@ export default {
           try {
             const result = await fetch('https://oauth2.googleapis.com/revoke', {
               method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({ token: auth.refreshToken }), signal: AbortSignal.timeout(15000), redirect: 'error',
+              body: new URLSearchParams({ token: auth.refreshToken }), signal: AbortSignal.timeout(15000), redirect: 'manual',
             });
             revoked = result.ok;
           } catch { revoked = false; }

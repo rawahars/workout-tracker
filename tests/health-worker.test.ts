@@ -41,6 +41,7 @@ function token(scopes: readonly string[] = HEALTH_SCOPES) {
   return { access_token: accessToken, refresh_token: refreshToken, scope: scopes.join(' '), refresh_token_expires_in: 604800 };
 }
 function mockGoogle(input: string, init?: RequestInit): Response {
+  if (init?.redirect === 'error') throw new TypeError('Unsupported redirect mode: error');
   if (input === 'https://oauth2.googleapis.com/token') return json(token());
   if (input === 'https://oauth2.googleapis.com/revoke') return new Response(null, { status: 200 });
   if (input.endsWith('/identity')) return json({ healthUserId: 'fixture-user', legacyUserId: 'fixture-legacy' });
@@ -63,6 +64,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Google Health authorization', () => {
+  it.each([
+    ['https://oauth2.googleapis.com/token', 'token_failed', 1],
+    ['https://health.googleapis.com/v4/users/me/identity', 'identity_failed', 2],
+  ])('rejects redirects from %s without forwarding credentials or exposing the destination', async (endpoint, expected, calls) => {
+    upstream.mockImplementation(async (input: string, init?: RequestInit) => input === endpoint ? new Response(null, {
+      status: 307, headers: { Location: 'https://other.invalid/private-provider-location' },
+    }) : mockGoogle(input, init));
+    const response = await attemptCallback();
+    const location = new URL(response.headers.get('Location')!);
+    expect(location.searchParams.get('health_error')).toBe(expected);
+    expect(location.href).not.toContain('private-provider-location');
+    expect(upstream).toHaveBeenCalledTimes(calls);
+    expect(upstream.mock.calls.every(call => call[1].redirect === 'manual')).toBe(true);
+    expect(response.headers.getSetCookie().some(value => value.startsWith(`${SESSION_COOKIE}=`))).toBe(false);
+  });
   it.each([
     ['invalid_client', 'oauth_client'],
     ['unauthorized_client', 'oauth_client'],
@@ -188,6 +204,16 @@ describe('Google Health authorization', () => {
     const response = await worker.fetch(post('disconnect', {}, await auth()), env);
     expect(await response.json()).toEqual({ disconnected: true, revoked: false });
     expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.getSetCookie().every(value => value.includes('Max-Age=0'))).toBe(true);
+  });
+  it('revokes the refresh token without following redirects and clears the local connection', async () => {
+    const response = await worker.fetch(post('disconnect', {}, await auth()), env);
+    expect(await response.json()).toEqual({ disconnected: true, revoked: true });
+    expect(upstream).toHaveBeenCalledTimes(1);
+    const [url, init] = upstream.mock.calls[0]!;
+    expect(url).toBe('https://oauth2.googleapis.com/revoke');
+    expect(init.redirect).toBe('manual');
+    expect(new URLSearchParams(init.body).get('token')).toBe(refreshToken);
     expect(response.headers.getSetCookie().every(value => value.includes('Max-Age=0'))).toBe(true);
   });
 });
