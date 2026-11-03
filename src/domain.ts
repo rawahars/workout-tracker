@@ -129,7 +129,7 @@ export function analysisSummary(state: State, selected?: Session) {
     ...sessions.map(s => [
       `\n${s.day} | ${s.name} | ${Math.round((s.duration ?? 0) / 60)} min`,
       ...s.exercises.map(e => `${e.name}: ${e.sets.filter(x => x.done).map(x => e.mode === 'weight' ? `${x.weight} kg x ${x.reps}` : e.mode === 'reps' ? `${x.reps} reps` : `${x.seconds} sec${x.distance ? ` / ${x.distance} km` : ''}`).join(', ')}${e.perSide ? ' per side' : ''}`),
-      s.metrics ? `User-supplied metrics: ${JSON.stringify(s.metrics)}` : '',
+      s.metrics ? `${s.metrics.source === 'google-health' ? 'Imported Google Health metrics' : 'User-supplied metrics'}: ${JSON.stringify(s.metrics)}` : '',
       s.notes ? `Notes: ${s.notes}` : '',
     ].filter(Boolean).join('\n')),
   ].join('\n');

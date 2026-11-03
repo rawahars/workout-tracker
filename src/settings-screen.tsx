@@ -8,6 +8,7 @@ import { Button, C, Card, Chip, Input, Label, Row, Section, Sheet, T, confirm, f
 import { cancelRestNotification, enableRestNotifications } from './timer';
 import { protectStorage, storageProtected } from './pwa';
 import { cancelMediaRefresh, refreshExerciseMedia, useMediaRefresh } from './media-refresh';
+import { HealthScreen } from './health-screen';
 
 export async function exportBackup() {
   const backup = await createBackup(getState());
@@ -92,7 +93,7 @@ export function SettingsScreen() {
       {refresh.error && <T style={{ color: C.danger, fontSize: 12, lineHeight: 19 }}>{refresh.error} Saved media has been kept.</T>}
       {refresh.running && <Button title="Stop refresh" small variant="ghost" onPress={cancelMediaRefresh} />}
     </Card>
-    <Section title="Fitbit Versa 4" />
-    <Card style={{ gap: 14 }}><Row><HeartPulse color={C.danger} size={23} /><T style={{ fontFamily: fonts.bold }}>Workout metrics</T></Row><T muted style={{ lineHeight: 21 }}>Add workout heart rate and steps from Fitbit in a saved session&apos;s details. Automatic sync requires a separately configured Google Health connection. Live Versa 4 heart-rate streaming is not available here.</T></Card>
+    <Section title="Fitbit / Google Health" />
+    <Card style={{ gap: 14 }}><Row><HeartPulse color={C.cyan} size={23} /><T style={{ fontFamily: fonts.bold }}>Wearable metrics</T></Row><T muted style={{ lineHeight: 21 }}>Connect with Google to view synced workouts, heart rate and steps. You choose which recorded workout to attach to a saved session.</T><Button title="Open Google Health" variant="secondary" onPress={() => nav.open(<HealthScreen />)} /></Card>
   </Sheet>;
 }

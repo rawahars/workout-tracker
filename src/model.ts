@@ -50,10 +50,14 @@ export const SessionExerciseSchema = z.object({
   sets: z.array(SetSchema).max(30),
 });
 export const MetricsSchema = z.object({
-  source: z.enum(['manual', 'import']),
+  source: z.enum(['manual', 'import', 'google-health']),
   averageHeartRate: z.number().min(25).max(250).optional(),
   maxHeartRate: z.number().min(25).max(250).optional(),
   steps: number.int().max(100000).optional(),
+  providerWorkoutId: z.string().max(300).optional(),
+  providerStartTime: z.string().datetime({ offset: true }).optional(),
+  providerEndTime: z.string().datetime({ offset: true }).optional(),
+  syncedAt: number.optional(),
 }).refine(value => !value.averageHeartRate || !value.maxHeartRate || value.maxHeartRate >= value.averageHeartRate, 'Maximum heart rate must be at least average');
 export const SessionSchema = z.object({
   id, name, day: DaySchema, startedAt: number,

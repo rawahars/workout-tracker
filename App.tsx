@@ -16,6 +16,7 @@ import { SessionScreen } from './src/session-screens';
 import { RestorePreview, SettingsScreen } from './src/settings-screen';
 import { initializePwa } from './src/pwa';
 import { refreshExerciseMedia } from './src/media-refresh';
+import { healthResultMessage } from './src/health-client';
 import { Button, C, IconButton, Label, NavigationContext, Row, T, fonts, safely, useNav } from './src/ui';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
@@ -65,6 +66,8 @@ function Application() {
   useEffect(() => {
     void boot().then(() => {
       setReady(true);
+      const healthMessage = healthResultMessage();
+      if (healthMessage) setMessage(healthMessage);
       if (!bootFailure()) void getSecret('youtube-key').then(key => { if (key) void refreshExerciseMedia(key); }).catch(() => undefined);
     });
     void initializePwa().then(setOfflineReady).catch(() => setMessage('Offline setup could not finish. Open the app online once before using it offline.'));

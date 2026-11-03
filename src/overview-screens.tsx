@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, Dumbbell, Flame, Play, Plus, TrendingUp } from './icons';
+import { ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, Dumbbell, Flame, HeartPulse, Play, Plus, TrendingUp } from './icons';
 import { localDay } from './model';
 import { analyze, completedSets, fmt, shortDate, weekDays, weeklySessions, weekdayNames } from './domain';
 import { useStore } from './store';
 import { AnalysisExport, SessionScreen, launchWorkout } from './session-screens';
 import { WorkoutCard, WorkoutDetail } from './routine-screens';
+import { HealthScreen } from './health-screen';
 import { Button, C, Card, Clock, Empty, Hero, IconButton, Label, Row, Section, SessionCard, Sheet, Stat, T, fonts, safely, useNav } from './ui';
 
 export function TodayScreen() {
@@ -118,6 +119,7 @@ export function ProgressScreen() {
       <Row><Stat label="Heaviest completed load" value={`${fmt(selection.weight)} kg`} color={C.lime} /><Stat label="Reps at that load" value={String(selection.reps)} /></Row>
       {history.map((point, index) => <Row key={`${point.day}-${index}`}><T muted style={{ flex: 1, fontSize: 12 }}>{shortDate(point.day)}</T><T style={{ fontFamily: fonts.bold }}>{fmt(point.best)} kg</T></Row>)}
     </Card> : <Empty title="Build your baseline" description="Complete weighted sets to start your exercise-specific load history." icon={TrendingUp} />}
+    <Button title="Google Health wearable data" icon={HeartPulse} variant="secondary" onPress={() => nav.open(<HealthScreen />)} />
     <Button title="Review & export training summary" icon={ArrowRight} variant="secondary" disabled={!state.sessions.length} onPress={() => nav.open(<AnalysisExport />)} />
   </ScrollView>;
 }

@@ -67,7 +67,43 @@ Each eligible exercise uses an API search request, so repeated reloads can exhau
 
 Analysis is calculated locally. **Review & export summary** copies only the summary you choose to share; FORM does not contact an AI service.
 
-Fitbit heart rate and workout steps can be entered in a saved session's details. Automatic Fitbit/Google Health sync is not configured. iPhone web apps cannot reliably deliver timed background alerts; elapsed/rest timers catch up when reopened.
+Fitbit heart rate and workout steps can be entered manually or imported from a selected Google Health workout in a saved session's details. iPhone web apps cannot reliably deliver timed background alerts; elapsed/rest timers catch up when reopened.
+
+## Google Health / Fitbit setup
+
+Google Health uses OAuth consent, **not a YouTube-style API key**. The app requests read-only activity/fitness and health-metrics access. Sleep, GPS and write permissions are not requested.
+
+1. Link your Fitbit account to your Google account in the Fitbit / Google Health mobile app and sync your watch.
+2. In Google Cloud, enable **Google Health API**, configure an External OAuth consent screen, and add your account as a test user while the app is in Testing.
+3. Create an OAuth client of type **Web application**. Set the authorized JavaScript origin to `https://workout-tracker.harshrawat015.workers.dev` and authorized redirect URI to `https://workout-tracker.harshrawat015.workers.dev/api/health/callback`.
+4. Allow these scopes on the consent screen:
+
+```text
+https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
+https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly
+```
+
+In **Cloudflare Worker > Settings > Variables and Secrets**, add these as secrets:
+
+| Secret | Value |
+|---|---|
+| `GOOGLE_HEALTH_CLIENT_ID` | OAuth Web application client ID |
+| `GOOGLE_HEALTH_CLIENT_SECRET` | OAuth client secret |
+| `HEALTH_COOKIE_KEY` | Base64-encoded random 32-byte encryption key |
+
+Generate the encryption key locally:
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+Copy it directly into Cloudflare. Do not put these credentials in the app, GitHub, backups, or chat. Save/deploy the Worker settings, then use **Settings > Open Google Health > Connect Google Health**.
+
+After connecting, select a date and load wearable data. In a saved session, use **Session details > Import Google Health metrics**, choose the matching recorded workout, review it, and attach its metrics. Only the metrics you attach are saved in workout history; raw Google responses and authentication tokens are not included in backups. Day summaries distinguish missing data from a measured zero.
+
+The connection uses encrypted, `Secure`, `HttpOnly`, host-only cookies; the encryption key and OAuth client secret stay server-side. No database or live Bluetooth connection is needed. Disconnect clears the connection and attempts Google revocation; previously imported local metrics are retained unless you delete them.
+
+Google Testing-mode refresh tokens expire after seven days, so reconnection is expected during testing. Wider distribution may require Google's app verification. Preview/local OAuth testing needs its own registered redirect URI and credentials.
 
 ## Validate
 

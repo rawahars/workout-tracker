@@ -42,7 +42,8 @@ self.addEventListener('activate', event => {
   event.waitUntil(Promise.all([caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('form-shell-') && key !== CACHE).map(key => caches.delete(key)))), self.clients.claim()]));
 });
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
   event.respondWith(caches.open(CACHE).then(async cache => {
     const request = event.request.mode === 'navigate' ? self.registration.scope : event.request;
     return await cache.match(request) || fetch(event.request);

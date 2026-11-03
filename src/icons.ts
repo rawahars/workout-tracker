@@ -36,3 +36,4 @@ export { default as Database } from 'lucide-react-native/icons/database';
 export { default as HeartPulse } from 'lucide-react-native/icons/heart-pulse';
 export { default as KeyRound } from 'lucide-react-native/icons/key-round';
 export { default as ShieldCheck } from 'lucide-react-native/icons/shield-check';
+export { default as RefreshCw } from 'lucide-react-native/icons/refresh-cw';

@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
-import { ArrowLeftRight, Check, CheckCheck, Clock3, Copy, MoreHorizontal, Plus, SkipForward, Trash2, Trophy, X } from './icons';
+import { ArrowLeftRight, Check, CheckCheck, Clock3, Copy, HeartPulse, MoreHorizontal, Plus, SkipForward, Trash2, Trophy, X } from './icons';
 import * as Clipboard from 'expo-clipboard';
 import { DaySchema, Exercise, MetricsSchema, Session, SessionExercise, Workout, localDay } from './model';
 import { analysisSummary, completedSets, emptySet, finishSession, fmt, formatTime, sessionExercise, startSession, totalSets, uid, validateLoggedSet, volume } from './domain';
@@ -8,6 +8,7 @@ import { commit, getState, useStore } from './store';
 import { ExerciseDetail, ExercisePicker } from './exercise-screens';
 import { AddButton, Artwork, Button, C, Card, Clock, Empty, IconButton, Input, Label, Row, Sheet, Stat, T, buzz, confirm, fonts, safely, useClock, useNav } from './ui';
 import { cancelRestNotification, scheduleRestNotification } from './timer';
+import { HealthScreen } from './health-screen';
 
 type Nav = ReturnType<typeof useNav>;
 export async function launchWorkout(workout: Workout | undefined, nav: Nav, day = localDay(), programId?: string) {
@@ -149,12 +150,13 @@ export function SessionDetails({ id }: { id: string }) {
   const [avg, setAvg] = useState(String(session.metrics?.averageHeartRate ?? ''));
   const [max, setMax] = useState(String(session.metrics?.maxHeartRate ?? ''));
   const [steps, setSteps] = useState(String(session.metrics?.steps ?? ''));
+  const [metricsEdited, setMetricsEdited] = useState(false);
   const save = async () => {
     DaySchema.parse(day);
     const minutes = Number(duration);
     if (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440) throw new Error('Enter a duration between 0 and 1440 minutes.');
     const hasMetrics = !!(avg.trim() || max.trim() || steps.trim());
-    const metrics = hasMetrics ? MetricsSchema.parse({
+    const metrics = !metricsEdited ? session.metrics : hasMetrics ? MetricsSchema.parse({
       source: 'manual', averageHeartRate: avg.trim() ? Number(avg) : undefined,
       maxHeartRate: max.trim() ? Number(max) : undefined, steps: steps.trim() ? Number(steps) : undefined,
     }) : undefined;
@@ -165,10 +167,18 @@ export function SessionDetails({ id }: { id: string }) {
     <Input label="Date (YYYY-MM-DD)" value={day} onChangeText={setDay} />
     <Input label="Duration in minutes" keyboardType="decimal-pad" value={duration} onChangeText={setDuration} />
     <Label color={C.cyan}>Optional watch metrics</Label>
-    <T muted style={{ lineHeight: 21 }}>Copy values for this workout from Fitbit. These are user-entered values, not a live watch connection.</T>
-    <Input label="Average heart rate (bpm)" keyboardType="number-pad" value={avg} onChangeText={setAvg} />
-    <Input label="Maximum heart rate (bpm)" keyboardType="number-pad" value={max} onChangeText={setMax} />
-    <Input label="Workout steps" keyboardType="number-pad" value={steps} onChangeText={setSteps} />
+    <Button title="Import Google Health metrics" icon={HeartPulse} variant="secondary" onPress={() => {
+      if (!DaySchema.safeParse(day).success) { nav.toast('Choose a valid session date first.'); return; }
+      nav.open(<HealthScreen day={day} onImport={async metrics => {
+        await updateSession(id, s => ({ ...s, metrics }));
+        setAvg(String(metrics.averageHeartRate ?? '')); setMax(String(metrics.maxHeartRate ?? '')); setSteps(String(metrics.steps ?? ''));
+        setMetricsEdited(false);
+      }} />);
+    }} />
+    <T muted style={{ lineHeight: 21 }}>Import a matching recorded workout, or enter values manually below.</T>
+    <Input label="Average heart rate (bpm)" keyboardType="number-pad" value={avg} onChangeText={value => { setAvg(value); setMetricsEdited(true); }} />
+    <Input label="Maximum heart rate (bpm)" keyboardType="number-pad" value={max} onChangeText={value => { setMax(value); setMetricsEdited(true); }} />
+    <Input label="Workout steps" keyboardType="number-pad" value={steps} onChangeText={value => { setSteps(value); setMetricsEdited(true); }} />
     <Button title="Delete session" variant="danger" icon={Trash2} onPress={() => confirm('Delete this session?', 'It will be removed from your calendar and statistics.', () => void safely(async () => { await commit(s => ({ ...s, sessions: s.sessions.filter(x => x.id !== id) })); nav.closeAll(); nav.toast('Session deleted'); }, nav.toast), true)} />
   </Sheet>;
 }
@@ -192,7 +202,7 @@ export function SessionSummary({ id }: { id: string }) {
   return <Sheet title="Session summary">
     <View style={{ alignItems: 'center', paddingVertical: 14, gap: 14 }}><View style={{ padding: 22, borderRadius: 30, backgroundColor: `${session.color}18` }}><Trophy size={38} color={session.color} /></View><Label color={session.color}>Work recorded</Label><T style={{ fontFamily: fonts.display, fontSize: 30, textAlign: 'center' }}>{session.name}</T><T muted>{session.day}</T></View>
     <Card><Row><Stat label="Minutes" value={String(Math.round((session.duration ?? 0) / 60))} /><Stat label="Sets" value={String(completedSets(session))} /><Stat label="Volume kg" value={fmt(volume(session))} color={session.color} /></Row></Card>
-    {session.metrics && <Card style={{ gap: 12 }}><Label color={C.cyan}>Watch metrics · manually entered</Label><Row>{session.metrics.averageHeartRate !== undefined && <Stat value={String(session.metrics.averageHeartRate)} label="Average bpm" />}{session.metrics.maxHeartRate !== undefined && <Stat value={String(session.metrics.maxHeartRate)} label="Peak bpm" />}{session.metrics.steps !== undefined && <Stat value={fmt(session.metrics.steps)} label="Steps" />}</Row></Card>}
+    {session.metrics && <Card style={{ gap: 12 }}><Label color={C.cyan}>{session.metrics.source === 'google-health' ? 'Watch metrics · Google Health' : 'Watch metrics · manually entered'}</Label><Row>{session.metrics.averageHeartRate !== undefined && <Stat value={String(session.metrics.averageHeartRate)} label="Average bpm" />}{session.metrics.maxHeartRate !== undefined && <Stat value={String(session.metrics.maxHeartRate)} label="Peak bpm" />}{session.metrics.steps !== undefined && <Stat value={fmt(session.metrics.steps)} label="Steps" />}</Row>{session.metrics.source === 'google-health' && session.metrics.syncedAt !== undefined && <T muted style={{ fontSize: 11 }}>Imported {new Date(session.metrics.syncedAt).toLocaleString()}</T>}</Card>}
     {session.exercises.filter(e => e.sets.some(s => s.done)).map(e => <Card key={e.id} style={{ gap: 9 }}><T style={{ fontFamily: fonts.bold }}>{e.name}</T><T muted>{e.sets.filter(s => s.done).map(s => e.mode === 'weight' ? `${fmt(s.weight)} kg × ${s.reps}` : e.mode === 'reps' ? `${s.reps} reps` : `${Math.round(s.seconds)} sec${s.distance ? ` / ${s.distance} km` : ''}`).join('   /   ')}{e.perSide ? ' per side' : ''}</T></Card>)}
     <Button title="Save as workout template" icon={Copy} variant="secondary" onPress={() => void safely(saveTemplate, nav.toast)} />
     <Button title="Review & export summary" variant="secondary" onPress={() => nav.open(<AnalysisExport sessionId={id} />)} />
