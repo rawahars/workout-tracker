@@ -2,6 +2,8 @@
 
 An offline-first workout tracker for your iPhone Home Screen.
 
+**Cost policy:** Do not enable billing, link payment accounts, upgrade plans, or add paid services for this project. If an integration requires billing, leave it disabled.
+
 ## Run locally
 
 ```powershell
@@ -51,7 +53,7 @@ Keep the same production address when deploying updates. Local data belongs to t
 
 Every acknowledged edit is saved locally. Completed sessions keep snapshots, so template changes do not rewrite history. Return mode starts enabled and caps working sets at two.
 
-During an active workout, tap the clock icon to start a countdown. It can be paused, resumed or cleared and plays a short alarm on completion. Keep the app open and sound enabled; Safari may require another tap to enable audio after a reload. The remaining duration is preserved across reloads.
+During an active workout, tap the clock icon to start a countdown. It can be paused, resumed or cleared and plays a short alarm on completion. On supported Safari versions, the chime briefly requests playback mode to sound despite Silent Mode, then restores the previous audio mode. This may pause other music. Keep the app open and media volume up; alarms while closed or locked are not guaranteed. Safari may require another tap to enable audio after a reload. The remaining duration is preserved across reloads.
 
 Screens support browser Back and Safari's left-edge back gesture. Individual logs remain separate: the dashboard counts same-day sessions with a gap of at most 120 minutes as one workout, and Recent sessions uses small day headings.
 

@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { Exercise, Session } from './model';
 import { imageData } from './platform';
 import { thumbnailFor } from './media';
-import { completedSets, formatTime, shortDate, volume, fmt } from './domain';
+import { completedSets, formatTime, shortDate } from './domain';
 
 export const C = { bg: '#101411', card: '#1A201C', raised: '#232B25', line: '#303A32', text: '#F3F6EF', muted: '#A6B0A6', lime: '#C7F36B', purple: '#B4A0FF', cyan: '#73D9E7', orange: '#F6BE83', danger: '#FF9C99' };
 export const fonts = { body: 'DMSans_400Regular', medium: 'DMSans_500Medium', bold: 'DMSans_700Bold', display: 'SpaceGrotesk_700Bold' };
@@ -117,7 +117,7 @@ export function SessionCard({ session, onPress, hideDate = false }: { session: S
     <Row><View style={{ width: 4, height: 36, borderRadius: 4, backgroundColor: session.color }} /><View style={{ flex: 1, gap: 4 }}>
       <T style={{ fontFamily: fonts.bold, fontSize: 16 }}>{session.name}</T><T muted style={{ fontSize: 11 }}>{hideDate ? '' : `${shortDate(session.day)} · `}{session.programName ?? 'Freestyle / standalone'}</T>
     </View><Check size={18} color={session.color} /></Row>
-    <Row style={{ gap: 18 }}><T muted style={{ fontSize: 12 }}>{Math.round((session.duration ?? 0) / 60)} min</T><T muted style={{ fontSize: 12 }}>{completedSets(session)} sets</T>{volume(session) > 0 && <T muted style={{ fontSize: 12 }}>{fmt(volume(session))} kg volume</T>}</Row>
+    <Row style={{ gap: 18 }}><T muted style={{ fontSize: 12 }}>{Math.round((session.duration ?? 0) / 60)} min</T><T muted style={{ fontSize: 12 }}>{completedSets(session)} sets</T></Row>
   </Pressable>;
 }
 export function Reorder({ onUp, onDown, onRemove }: { onUp: () => void; onDown: () => void; onRemove: () => void }) {

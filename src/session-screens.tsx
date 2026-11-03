@@ -3,7 +3,7 @@ import { FlatList, Pressable, TextInput, View } from 'react-native';
 import { ArrowLeftRight, Check, CheckCheck, Clock3, Copy, HeartPulse, MoreHorizontal, Plus, SkipForward, Trash2, Trophy, X } from './icons';
 import * as Clipboard from 'expo-clipboard';
 import { DaySchema, Exercise, MetricsSchema, Session, SessionExercise, Workout, localDay } from './model';
-import { analysisSummary, completedSets, emptySet, finishSession, fmt, formatTime, sessionExercise, startSession, totalSets, uid, validateLoggedSet, volume } from './domain';
+import { analysisSummary, completedSets, emptySet, finishSession, fmt, formatTime, sessionExercise, startSession, totalSets, uid, validateLoggedSet } from './domain';
 import { commit, getState, useStore } from './store';
 import { ExerciseDetail, ExercisePicker } from './exercise-screens';
 import { AddButton, Artwork, Button, C, Card, Clock, Empty, IconButton, Input, Label, Row, Sheet, Stat, T, buzz, confirm, fonts, safely, useClock, useNav } from './ui';
@@ -130,7 +130,7 @@ export function SessionScreen({ id }: { id?: string }) {
       ListHeaderComponent={<View style={{ gap: 15, marginBottom: 3 }}>
         <Row style={{ justifyContent: 'space-between' }}><Label color={session.color}>{session.day} · {session.programName ?? 'Freestyle / standalone'}</Label>{!id && <Clock start={session.startedAt} />}</Row>
         <Input accessibilityLabel="Session name" value={name} onChangeText={setName} maxLength={100} onBlur={() => { if (name.trim()) void safely(() => updateSession(id, s => ({ ...s, name: name.trim() })), nav.toast); }} style={{ fontFamily: fonts.display, fontSize: 25, backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0 }} />
-        <Row><Stat label="Completed sets" value={String(completedSets(session))} /><Stat label="Load-volume kg" value={fmt(volume(session))} color={session.color} /></Row>
+        <Row><Stat label="Completed sets" value={String(completedSets(session))} /></Row>
         {!id && <T muted style={{ fontSize: 11 }}>Saved on every change · kg per dumbbell · reps per side</T>}
         {id && <Button title="Session details & metrics" small variant="secondary" icon={MoreHorizontal} onPress={() => nav.open(<SessionDetails id={id} />)} />}
       </View>}
@@ -203,7 +203,7 @@ export function SessionSummary({ id }: { id: string }) {
   };
   return <Sheet title="Session summary">
     <View style={{ alignItems: 'center', paddingVertical: 14, gap: 14 }}><View style={{ padding: 22, borderRadius: 30, backgroundColor: `${session.color}18` }}><Trophy size={38} color={session.color} /></View><Label color={session.color}>Work recorded</Label><T style={{ fontFamily: fonts.display, fontSize: 30, textAlign: 'center' }}>{session.name}</T><T muted>{session.day}</T></View>
-    <Card><Row><Stat label="Minutes" value={String(Math.round((session.duration ?? 0) / 60))} /><Stat label="Sets" value={String(completedSets(session))} /><Stat label="Volume kg" value={fmt(volume(session))} color={session.color} /></Row></Card>
+    <Card><Row><Stat label="Minutes" value={String(Math.round((session.duration ?? 0) / 60))} /><Stat label="Sets" value={String(completedSets(session))} /></Row></Card>
     {session.metrics && <Card style={{ gap: 12 }}><Label color={C.cyan}>{session.metrics.source === 'google-health' ? 'Watch metrics · Google Health' : 'Watch metrics · manually entered'}</Label><Row>{session.metrics.averageHeartRate !== undefined && <Stat value={String(session.metrics.averageHeartRate)} label="Average bpm" />}{session.metrics.maxHeartRate !== undefined && <Stat value={String(session.metrics.maxHeartRate)} label="Peak bpm" />}{session.metrics.steps !== undefined && <Stat value={fmt(session.metrics.steps)} label="Steps" />}</Row>{session.metrics.source === 'google-health' && session.metrics.syncedAt !== undefined && <T muted style={{ fontSize: 11 }}>Imported {new Date(session.metrics.syncedAt).toLocaleString()}</T>}</Card>}
     {session.exercises.filter(e => e.sets.some(s => s.done)).map(e => <Card key={e.id} style={{ gap: 9 }}><T style={{ fontFamily: fonts.bold }}>{e.name}</T><T muted>{e.sets.filter(s => s.done).map(s => e.mode === 'weight' ? `${fmt(s.weight)} kg × ${s.reps}` : e.mode === 'reps' ? `${s.reps} reps` : `${Math.round(s.seconds)} sec${s.distance ? ` / ${s.distance} km` : ''}`).join('   /   ')}{e.perSide ? ' per side' : ''}</T></Card>)}
     <Button title="Save as workout template" icon={Copy} variant="secondary" onPress={() => void safely(saveTemplate, nav.toast)} />

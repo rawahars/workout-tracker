@@ -9,9 +9,6 @@ export const shortDate = (day: string) => new Date(`${day}T12:00:00`).toLocaleDa
 export const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const completedSets = (session: Session) => session.exercises.reduce((total, e) => total + e.sets.filter(s => s.done).length, 0);
 export const totalSets = (session: Session) => session.exercises.reduce((total, e) => total + e.sets.length, 0);
-export const volume = (session: Session) => session.exercises.reduce((total, e) => total + (
-  e.mode === 'weight' ? e.sets.reduce((sum, s) => sum + (s.done ? s.weight * s.reps : 0), 0) : 0
-), 0);
 export function targetFor(exercise: Exercise, rx?: Prescription) {
   if (!rx) return exercise.mode === 'cardio' ? '20 min' : exercise.mode === 'seconds' ? '20-40 sec' : '8-12 reps';
   const min = exercise.mode === 'cardio' ? Math.round(rx.min / 60) : rx.min;
@@ -124,12 +121,6 @@ export function analyze(state: State) {
   insights.push(`${trainingDays} of ${state.settings.weeklyGoal} training days completed this week.`);
   if (state.settings.returnMode) insights.push('Return mode is on: working sets are capped at two. Turn it off when you are recovering comfortably.');
   if (weekly.length) {
-    const lastWeekDays = new Set(weekDays(new Date(Date.now() - 7 * 86400000)));
-    const lastWeekVolume = state.sessions.filter(s => lastWeekDays.has(s.day)).reduce((sum, s) => sum + volume(s), 0);
-    if (lastWeekVolume > 0) {
-      const change = Math.round((weekly.reduce((sum, s) => sum + volume(s), 0) / lastWeekVolume - 1) * 100);
-      insights.push(`Recorded load-volume is ${change >= 0 ? '+' : ''}${change}% versus the full previous week. Exercise selection and days completed affect this comparison.`);
-    }
     if (trainingDays >= 5) insights.push('You have trained on five or more days this week. Keep the optional visit easy if fatigue is building.');
   } else insights.push('Log your first session to start tracking consistency, completed sets and load trends.');
   return { weekly, trainingDays, muscleSets: [...muscleSets].sort((a, b) => b[1] - a[1]), records, insights };
@@ -138,7 +129,7 @@ export function analysisSummary(state: State, selected?: Session) {
   const sessions = selected ? [selected] : [...state.sessions].sort((a, b) => b.day.localeCompare(a.day)).slice(0, 10);
   return [
     'Review this training log for consistency and practical progression. Do not infer medical conditions, recovery status, calorie expenditure or muscle growth from these logs alone. Ask for missing context.',
-    'Loads are recorded kg, consistently per dumbbell where applicable. Unilateral repetitions are per side. Unchecked sets are excluded. Load-volume is not comparable across different exercises or machines.',
+    'Loads are recorded kg, consistently per dumbbell where applicable. Unilateral repetitions are per side. Unchecked sets are excluded.',
     ...sessions.map(s => [
       `\n${s.day} | ${s.name} | ${Math.round((s.duration ?? 0) / 60)} min`,
       ...s.exercises.map(e => `${e.name}: ${e.sets.filter(x => x.done).map(x => e.mode === 'weight' ? `${x.weight} kg x ${x.reps}` : e.mode === 'reps' ? `${x.reps} reps` : `${x.seconds} sec${x.distance ? ` / ${x.distance} km` : ''}`).join(', ')}${e.perSide ? ' per side' : ''}`),

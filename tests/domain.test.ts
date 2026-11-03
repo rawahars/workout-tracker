@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { StateSchema, localDay, validDay } from '../src/model';
 import { seedState, upgradeLibrary } from '../src/seed';
-import { alternatives, completedSets, finishSession, previousSets, sessionExercise, startSession, validateLoggedSet, volume, weekDays } from '../src/domain';
+import { alternatives, completedSets, finishSession, previousSets, sessionExercise, startSession, validateLoggedSet, weekDays } from '../src/domain';
 
 function state() { return structuredClone(seedState()); }
 function completed(day = '2026-11-02') {
@@ -50,7 +50,6 @@ describe('workout lifecycle', () => {
     expect(session.day).toBe('2026-11-02');
     expect(session.duration).toBe(600);
     expect(completedSets(session)).toBe(1);
-    expect(volume(session)).toBe(120);
     expect(StateSchema.safeParse(result).success).toBe(true);
   });
   it('uses the latest performed day rather than the date a backdated workout was entered', () => {

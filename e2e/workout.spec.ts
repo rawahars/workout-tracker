@@ -15,6 +15,7 @@ test('logs a freestyle workout, survives reload and appears in the calendar and 
   await page.getByRole('button', { name: 'Add exercise', exact: true }).click();
   await page.getByRole('textbox', { name: 'Search exercises' }).fill('Flat dumbbell');
   await page.getByRole('button', { name: 'Select Flat dumbbell chest press' }).click();
+  await expect(page.getByText(/load.volume|volume kg|kg volume/i)).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Flat dumbbell chest press set 1 kg', exact: true }).fill('12.5');
   await page.getByRole('textbox', { name: 'Flat dumbbell chest press set 1 reps', exact: true }).fill('10');
   await page.getByRole('checkbox', { name: 'Complete Flat dumbbell chest press set 1', exact: true }).click();
@@ -26,12 +27,14 @@ test('logs a freestyle workout, survives reload and appears in the calendar and 
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Finish workout', exact: true }).click();
   await expect(page.getByText('Work recorded', { exact: true })).toBeVisible();
+  await expect(page.getByText(/load.volume|volume kg|kg volume/i)).toHaveCount(0);
   await page.getByRole('button', { name: 'Save as workout template' }).click();
   await page.getByRole('button', { name: 'Close', exact: true }).last().click();
   await page.getByRole('tab', { name: 'Calendar tab' }).click();
   await expect(page.getByRole('button', { name: /View Freestyle workout/ })).toBeVisible();
   await page.getByRole('tab', { name: 'Progress tab' }).click();
   await expect(page.getByText('12.5 kg', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/load.volume|volume kg|kg volume/i)).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 test('reopens and logs offline after the app shell is installed', async ({ page, context }) => {

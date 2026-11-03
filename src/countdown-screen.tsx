@@ -92,6 +92,6 @@ export function CountdownScreen() {
       const prepared = unlockAlarm();
       void safely(async () => { if (!await prepared || !ringAlarm()) nav.toast('Sound is unavailable. Check your iPhone sound settings.'); refresh(value => value + 1); }, nav.toast);
     }} />
-    <T muted style={{ fontSize: 12, lineHeight: 20 }}>Keep the app open and sound enabled for the alarm. Remaining time survives a reload, but Safari may require another tap to enable sound.</T>
+    <T muted style={{ fontSize: 12, lineHeight: 20 }}>Keep the app open and media volume up. Supported Safari versions use playback mode briefly to sound in Silent Mode; other music may pause. Sound while locked or closed is not guaranteed. After a reload, tap to enable sound again.</T>
   </Sheet>;
 }
