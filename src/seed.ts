@@ -43,7 +43,7 @@ const entries: Seed[] = [
   ['calf', 'Standing calf raise', 'Calves', 'Calf raise', 'Machine'],
   ['pike', 'Pike push-up', 'Shoulders', 'Vertical push', 'Bodyweight', 'reps'],
   ['scapular', 'Scapular push-up', 'Back', 'Mobility', 'Bodyweight', 'reps'],
-  ['pass-through', 'Dumbbell pass-through', 'Shoulders', 'Mobility', 'Dumbbell'],
+  ['pass-through', 'Plank dumbbell pass-through', 'Core', 'Core', 'Dumbbell', 'weight', true],
   ['beast', 'Beast hold', 'Core', 'Core', 'Bodyweight', 'seconds'],
   ['beast-rotation', 'Beast hold rotation', 'Core', 'Core', 'Bodyweight', 'reps', true],
   ['crunch', 'Crunch', 'Core', 'Core', 'Bodyweight', 'reps'],
@@ -57,6 +57,7 @@ const entries: Seed[] = [
   ['dead-bug', 'Dead bug', 'Core', 'Core', 'Bodyweight', 'reps', true],
   ['side-plank', 'Side plank', 'Core', 'Core', 'Bodyweight', 'seconds', true],
   ['walking', 'Brisk / incline walking', 'Full body', 'Cardio', 'Cardio machine', 'cardio'],
+  ['treadmill', 'Treadmill', 'Full body', 'Cardio', 'Cardio machine', 'cardio'],
   ['cycling', 'Stationary cycling', 'Full body', 'Cardio', 'Cardio machine', 'cardio'],
   ['elliptical', 'Elliptical', 'Full body', 'Cardio', 'Cardio machine', 'cardio'],
   ['running', 'Running', 'Full body', 'Cardio', 'Cardio machine', 'cardio'],
@@ -134,4 +135,15 @@ export function seedState(): State {
     sessions: [], active: null,
     settings: { programId: 'foundation', returnMode: true, weeklyGoal: 5, lastExportAt: null, notifications: false },
   };
+}
+export function upgradeLibrary(state: State): State {
+  const ids = new Set(state.exercises.map(exercise => exercise.id));
+  const missing = defaultExercises.filter(exercise => !ids.has(exercise.id));
+  let changed = missing.length > 0;
+  const exercises = state.exercises.map(exercise => {
+    if (exercise.id !== 'pass-through' || exercise.name !== 'Dumbbell pass-through' || exercise.muscle !== 'Shoulders' || exercise.pattern !== 'Mobility') return exercise;
+    changed = true;
+    return { ...exercise, name: 'Plank dumbbell pass-through', muscle: 'Core' as const, pattern: 'Core' as const, perSide: true };
+  });
+  return changed ? { ...state, exercises: [...exercises, ...missing] } : state;
 }

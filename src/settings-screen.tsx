@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, Switch, View } from 'react-native';
 import { Check, CloudDownload, CloudUpload, Database, HeartPulse, KeyRound, ShieldCheck, Sparkles } from './icons';
 import { Backup, createBackup, parseBackup, prepareRestore } from './backup';
@@ -6,8 +6,8 @@ import { chooseTextFile, exportText, getSecret, setSecret } from './platform';
 import { commit, getState, restoreState, useStore } from './store';
 import { Button, C, Card, Chip, Input, Label, Row, Section, Sheet, T, confirm, fonts, safely, useNav } from './ui';
 import { cancelRestNotification, enableRestNotifications } from './timer';
-import { findTutorial } from './media';
 import { protectStorage, storageProtected } from './pwa';
+import { cancelMediaRefresh, refreshExerciseMedia, useMediaRefresh } from './media-refresh';
 
 export async function exportBackup() {
   const backup = await createBackup(getState());
@@ -37,32 +37,17 @@ export function SettingsScreen() {
   const [key, setKey] = useState('');
   const [keySaved, setKeySaved] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState('');
   const [protectedStorage, setProtectedStorage] = useState(false);
-  const cancelled = useRef(false);
+  const refresh = useMediaRefresh();
   useEffect(() => {
     void getSecret('youtube-key').then(value => { setKey(value ?? ''); setKeySaved(!!value); }).catch(() => undefined);
     void storageProtected().then(setProtectedStorage).catch(() => undefined);
-    return () => { cancelled.current = true; };
   }, []);
   const updateSetting = (settings: Partial<typeof state.settings>) => safely(() => commit(s => ({ ...s, settings: { ...s.settings, ...settings } })), nav.toast);
   const discover = async () => {
     const saved = await getSecret('youtube-key');
     if (!saved) throw new Error('Save a YouTube API key first.');
-    cancelled.current = false;
-    setBusy(true);
-    const pending = getState().exercises.filter(e => !e.videoId);
-    try {
-      for (let index = 0; index < pending.length; index++) {
-        if (cancelled.current) break;
-        const exercise = pending[index]!;
-        setProgress(`${index + 1} / ${pending.length} · ${exercise.name}`);
-        const result = await findTutorial(exercise, saved);
-        if (cancelled.current) break;
-        await commit(s => ({ ...s, exercises: s.exercises.map(e => e.id === exercise.id ? { ...e, ...result } : e) }));
-      }
-      if (!cancelled.current) nav.toast('Tutorial search complete');
-    } finally { setBusy(false); setProgress(''); }
+    await refreshExerciseMedia(saved);
   };
   return <Sheet title="Settings">
     <Card style={{ gap: 14 }}><Row><ShieldCheck size={23} color={C.lime} /><View style={{ flex: 1, gap: 5 }}><T style={{ fontFamily: fonts.bold }}>Local first. Yours always.</T><T muted style={{ fontSize: 12 }}>No account. No ads. No automatic health-data uploads.</T></View></Row></Card>
@@ -99,11 +84,13 @@ export function SettingsScreen() {
     <Section title="Video discovery" />
     <Card style={{ gap: 15 }}>
       <Row><KeyRound size={21} color={C.orange} /><T style={{ fontFamily: fonts.bold }}>YouTube Data API</T>{keySaved && <Check size={17} color={C.lime} />}</Row>
-      <T muted style={{ lineHeight: 21 }}>Add your own API key to find short tutorials automatically. Without a key, browse YouTube and paste a video link into any exercise.</T>
+      <T muted style={{ lineHeight: 21 }}>Built-in exercises include tutorials and image previews without a key. With your key, automatic media refreshes on every page reload. Manually selected images and videos are kept.</T>
       <Input accessibilityLabel="YouTube API key" placeholder="Your YouTube Data API key" secureTextEntry autoCapitalize="none" autoCorrect={false} value={key} onChangeText={setKey} />
-      <Button title={key.trim() ? Platform.OS === 'web' ? 'Use key for this browser session' : 'Save key on this device' : 'Remove saved key'} variant="secondary" disabled={busy} onPress={() => void safely(async () => { await setSecret('youtube-key', key.trim()); setKeySaved(!!key.trim()); nav.toast(key.trim() ? Platform.OS === 'web' ? 'Key saved for this browser session' : 'Key saved securely on this device' : 'Saved key removed'); }, nav.toast)} />
-      <Button title={busy ? 'Searching tutorials…' : 'Find missing tutorials'} icon={Sparkles} disabled={!keySaved || busy} onPress={() => void safely(discover, nav.toast)} />
-      {!!progress && <><T muted style={{ fontSize: 12 }}>{progress}</T><Button title="Stop search" small variant="ghost" onPress={() => { cancelled.current = true; }} /></>}
+      <Button title={key.trim() ? Platform.OS === 'web' ? 'Use key for this browser session' : 'Save key on this device' : 'Remove saved key'} variant="secondary" disabled={busy || refresh.running} onPress={() => void safely(async () => { await setSecret('youtube-key', key.trim()); setKeySaved(!!key.trim()); nav.toast(key.trim() ? 'Key saved. Reload the page to refresh exercise media.' : 'Saved key removed'); }, nav.toast)} />
+      <Button title={refresh.running ? 'Refreshing media…' : 'Refresh exercise media'} icon={Sparkles} disabled={!keySaved || busy || refresh.running} onPress={() => void safely(discover, nav.toast)} />
+      {refresh.total > 0 && <T muted style={{ fontSize: 12 }}>{refresh.running ? `${refresh.completed} / ${refresh.total} checked` : `${refresh.updated} tutorials updated`}</T>}
+      {refresh.error && <T style={{ color: C.danger, fontSize: 12, lineHeight: 19 }}>{refresh.error} Saved media has been kept.</T>}
+      {refresh.running && <Button title="Stop refresh" small variant="ghost" onPress={cancelMediaRefresh} />}
     </Card>
     <Section title="Fitbit Versa 4" />
     <Card style={{ gap: 14 }}><Row><HeartPulse color={C.danger} size={23} /><T style={{ fontFamily: fonts.bold }}>Workout metrics</T></Row><T muted style={{ lineHeight: 21 }}>Add workout heart rate and steps from Fitbit in a saved session&apos;s details. Automatic sync requires a separately configured Google Health connection. Live Versa 4 heart-rate streaming is not available here.</T></Card>

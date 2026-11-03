@@ -46,7 +46,7 @@ Keep the same production address when deploying updates. Local data belongs to t
 - **Today:** scheduled workouts or a freestyle session.
 - **Routines:** programs contain links to shared workout templates.
 - **Calendar:** all completed sessions, including freestyle and backdated logs.
-- **Explore:** 62 built-in exercises, custom movements, media and alternatives.
+- **Explore:** 63 built-in exercises, including treadmill, with default tutorials, image previews, custom media and alternatives.
 - **Progress:** training days, completed sets, primary-muscle sets and load history.
 
 Every acknowledged edit is saved locally. Completed sessions keep snapshots, so template changes do not rewrite history. Return mode starts enabled and caps working sets at two.
@@ -57,9 +57,13 @@ Do not clear Safari website data without a backup. Persistent storage can be req
 
 ## Images and videos
 
-Open an exercise's editor, use **Google Images**, save an image you can use, then **Choose image**. Imported images are stored offline and included in backups.
+Every built-in exercise has a selected YouTube tutorial and a tutorial-thumbnail image preview, available without an API key. Existing libraries receive these defaults without resetting workout history or replacing manually chosen media. Videos and remote previews need an internet connection; logging remains available offline.
 
-Paste a YouTube video link or add a **YouTube Data API v3** key in Settings. Restrict a browser key to your production address and that API. **Find missing tutorials** searches for short, embeddable tutorials; opening an exercise also searches if a key is available. The key lasts for the browser session. Automatic discovery needs an enabled API project and available quota. Videos stream from YouTube and are not downloaded or included in backups.
+For your own image, open an exercise's editor, use **Google Images**, save an image you can use, then **Choose image**. Imported images are stored offline and included in backups. You can also paste your preferred YouTube video link.
+
+Enter your own **YouTube Data API v3** key in Settings to refresh automatically on every page reload. Automatic/default videos and their thumbnails update; manually chosen images and videos are preserved. **Refresh exercise media** also runs this process without reloading. The key stays in browser-session storage and is never included in backups or source code. Restrict it to your production address and the YouTube Data API.
+
+Each eligible exercise uses an API search request, so repeated reloads can exhaust your project's quota. A failed or interrupted refresh keeps previously saved media; progress and errors appear in Settings. Videos stream from YouTube and are never downloaded or included in backups.
 
 Analysis is calculated locally. **Review & export summary** copies only the summary you choose to share; FORM does not contact an AI service.
 

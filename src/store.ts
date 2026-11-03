@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { State, StateSchema } from './model';
-import { seedState } from './seed';
+import { seedState, upgradeLibrary } from './seed';
 import { readSnapshot, writeSnapshot } from './platform';
 
 let state: State | undefined;
@@ -22,6 +22,9 @@ async function openStore(): Promise<void> {
     } else {
       try { loaded = StateSchema.parse(JSON.parse(raw)); }
       catch { throw new Error('Your saved data is invalid. Recover the previous save or import a backup.'); }
+      const upgraded = upgradeLibrary(loaded);
+      if (upgraded !== loaded) await writeSnapshot(JSON.stringify(upgraded));
+      loaded = upgraded;
     }
     state = loaded;
     bootError = undefined;
@@ -62,7 +65,7 @@ export function commit(next: State | ((current: State) => State)): Promise<void>
   });
 }
 export async function restoreState(next: State): Promise<void> {
-  await commit(StateSchema.parse(next));
+  await commit(upgradeLibrary(StateSchema.parse(next)));
 }
 export function useStore() {
   return useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, getState, getState);
@@ -72,6 +75,6 @@ export function recoverPrevious(): Promise<void> {
     await boot();
     const previous = await readSnapshot(true);
     if (previous === null) throw new Error('No recovery snapshot is available. Import a backup instead.');
-    await persist(StateSchema.parse(JSON.parse(previous)));
+    await persist(upgradeLibrary(StateSchema.parse(JSON.parse(previous))));
   });
 }

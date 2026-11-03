@@ -15,6 +15,8 @@ export const ExerciseSchema = z.object({
   perSide: z.boolean().default(false), notes: text.default(''),
   image: id.optional(), videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/).optional(),
   videoTitle: z.string().max(300).optional(), videoFetchedAt: number.optional(),
+  videoSource: z.enum(['manual', 'automatic']).optional(),
+  hideDefaultVideo: z.boolean().optional(),
 });
 export const PrescriptionSchema = z.object({
   id, exerciseId: id, sets: z.number().int().min(1).max(12),

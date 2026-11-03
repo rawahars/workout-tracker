@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import { FlatList, Image, Pressable, ScrollView, View } from 'react-native';
 import { ArrowLeftRight, ChevronRight, Edit3, ExternalLink, ImagePlus, Play, Plus, Search, Sparkles } from './icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -6,7 +6,8 @@ import { Exercise, ExerciseSchema, equipmentTypes, modes, muscles, patterns } fr
 import { alternatives, fmt, previousSets, uid } from './domain';
 import { commit, useStore } from './store';
 import { getSecret, saveImage } from './platform';
-import { findTutorial, googleImagesUrl, youtubeId, youtubeSearchUrl } from './media';
+import { findTutorial, googleImagesUrl, tutorialFor, youtubeId, youtubeSearchUrl } from './media';
+import { defaultTutorials } from './default-tutorials';
 import { Artwork, Button, C, Card, Chip, Empty, IconButton, Input, Label, Row, Section, Sheet, T, fonts, openUrl, safely, useNav } from './ui';
 import Tutorial from './Tutorial';
 
@@ -47,10 +48,10 @@ export function ExercisePicker({ onPick, alternativeTo }: { onPick: (exercise: E
 export function ExerciseDetail({ id }: { id: string }) {
   const state = useStore();
   const exercise = state.exercises.find(e => e.id === id)!;
+  const tutorial = tutorialFor(exercise);
   const nav = useNav();
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
-  const requested = useRef(false);
   const previous = previousSets(state, id);
   const search = async () => {
     setBusy(true);
@@ -58,16 +59,9 @@ export function ExerciseDetail({ id }: { id: string }) {
       const key = await getSecret('youtube-key');
       if (!key) { nav.toast('Add a YouTube API key in Settings, or choose a link in Edit exercise.'); return; }
       const result = await findTutorial(exercise, key);
-      await commit(current => ({ ...current, exercises: current.exercises.map(e => e.id === id ? { ...e, ...result } : e) }));
+      await commit(current => ({ ...current, exercises: current.exercises.map(e => e.id === id ? { ...e, ...result, videoSource: 'automatic', hideDefaultVideo: false } : e) }));
     } finally { setBusy(false); }
   };
-  useEffect(() => {
-    if (exercise.videoId || requested.current) return;
-    requested.current = true;
-    void getSecret('youtube-key').then(key => { if (key) return safely(search, nav.toast); }).catch(() => undefined);
-  // A tutorial lookup is attempted once per detail visit, not on every state update.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
   const alternativesList = alternatives(state, exercise);
   return <Sheet title="Movement">
     <Row style={{ justifyContent: 'space-between' }}><Artwork exercise={exercise} size={104} /><IconButton icon={Edit3} label="Edit exercise" onPress={() => nav.open(<ExerciseEditor id={id} />)} /></Row>
@@ -75,11 +69,11 @@ export function ExerciseDetail({ id }: { id: string }) {
     {!!exercise.notes && <Card><T style={{ lineHeight: 23 }}>{exercise.notes}</T></Card>}
     {previous.length > 0 && <Card style={{ gap: 10 }}><Label>Last completed sets</Label><T>{previous.map(s => exercise.mode === 'weight' ? `${fmt(s.weight)} kg × ${s.reps}` : exercise.mode === 'reps' ? `${s.reps} reps` : `${s.seconds} sec`).join('   /   ')}</T></Card>}
     <Section title="See the movement" />
-    {exercise.videoId ? playing ? <Tutorial videoId={exercise.videoId} /> : <Pressable accessibilityRole="button" accessibilityLabel="Play exercise tutorial" onPress={() => setPlaying(true)} style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: C.card }}>
-      <Image source={{ uri: `https://i.ytimg.com/vi/${exercise.videoId}/hqdefault.jpg` }} style={{ height: 180, width: '100%' }} />
-      <Row style={{ padding: 16 }}><Play size={20} color={C.lime} /><T style={{ flex: 1 }}>{exercise.videoTitle ?? 'Watch tutorial'}</T></Row>
+    {tutorial ? playing ? <Tutorial videoId={tutorial.videoId} /> : <Pressable accessibilityRole="button" accessibilityLabel="Play exercise tutorial" onPress={() => setPlaying(true)} style={{ borderRadius: 18, overflow: 'hidden', backgroundColor: C.card }}>
+      <Image accessibilityLabel={`${exercise.name} tutorial preview`} source={{ uri: `https://i.ytimg.com/vi/${tutorial.videoId}/hqdefault.jpg` }} resizeMode="cover" style={{ height: 180, width: '100%' }} />
+      <Row style={{ padding: 16 }}><Play size={20} color={C.lime} /><T style={{ flex: 1 }}>{tutorial.videoTitle}</T></Row>
     </Pressable> : <Card style={{ gap: 14 }}><T muted>No tutorial selected yet.</T><Button title={busy ? 'Finding tutorial…' : 'Find short tutorial'} icon={Sparkles} disabled={busy} onPress={() => void safely(search, nav.toast)} /></Card>}
-    <Button title={exercise.videoId ? 'Open in YouTube' : 'Browse YouTube'} icon={ExternalLink} variant="secondary" onPress={() => openUrl(exercise.videoId ? `https://www.youtube.com/watch?v=${exercise.videoId}` : youtubeSearchUrl(exercise), nav.toast)} />
+    <Button title={tutorial ? 'Open in YouTube' : 'Browse YouTube'} icon={ExternalLink} variant="secondary" onPress={() => openUrl(tutorial ? `https://www.youtube.com/watch?v=${tutorial.videoId}` : youtubeSearchUrl(exercise), nav.toast)} />
     <Section title="Similar movements" />
     {alternativesList.length ? alternativesList.map(e => <Pressable key={e.id} accessibilityRole="button" accessibilityLabel={`View ${e.name}`} onPress={() => nav.open(<ExerciseDetail id={e.id} />)}><Card><Row><Artwork exercise={e} size={44} /><T style={{ flex: 1 }}>{e.name}</T><ArrowLeftRight size={18} color={C.muted} /></Row></Card></Pressable>) : <T muted>No close alternatives in your library yet.</T>}
   </Sheet>;
@@ -87,8 +81,10 @@ export function ExerciseDetail({ id }: { id: string }) {
 export function ExerciseEditor({ id, onCreated }: { id?: string; onCreated?: (exercise: Exercise) => void }) {
   const state = useStore();
   const original = state.exercises.find(e => e.id === id);
+  const originalTutorial = original ? tutorialFor(original) : undefined;
   const [draft, setDraft] = useState<Exercise>(original ?? { id: uid(), name: '', muscle: 'Chest', equipment: 'Dumbbell', mode: 'weight', pattern: 'Horizontal push', perSide: false, notes: '' });
-  const [video, setVideo] = useState(original?.videoId ? `https://youtu.be/${original.videoId}` : '');
+  const [video, setVideo] = useState(originalTutorial ? `https://youtu.be/${originalTutorial.videoId}` : '');
+  const [videoChange, setVideoChange] = useState<'manual' | 'automatic'>();
   const [busy, setBusy] = useState(false);
   const nav = useNav();
   const chooseImage = async () => {
@@ -103,7 +99,11 @@ export function ExerciseEditor({ id, onCreated }: { id?: string; onCreated?: (ex
   const save = async () => {
     if (video.trim() && !youtubeId(video)) throw new Error('Enter a valid YouTube video link.');
     const selectedId = video.trim() ? youtubeId(video) : undefined;
-    const exercise = ExerciseSchema.parse({ ...draft, videoId: selectedId, videoTitle: selectedId === draft.videoId ? draft.videoTitle : 'Exercise tutorial', videoFetchedAt: selectedId === draft.videoId ? draft.videoFetchedAt : undefined });
+    const videoTitle = selectedId === draft.videoId ? draft.videoTitle : originalTutorial && selectedId === originalTutorial.videoId ? originalTutorial.videoTitle : 'Exercise tutorial';
+    const exercise = ExerciseSchema.parse({
+      ...draft,
+      ...(videoChange ? { videoId: selectedId, videoTitle, videoSource: videoChange, videoFetchedAt: videoChange === 'automatic' && selectedId === draft.videoId ? draft.videoFetchedAt : undefined, hideDefaultVideo: !selectedId } : {}),
+    });
     await commit(current => ({ ...current, exercises: original ? current.exercises.map(e => e.id === id ? exercise : e) : [...current.exercises, exercise] }));
     nav.close();
     onCreated?.(exercise);
@@ -117,17 +117,25 @@ export function ExerciseEditor({ id, onCreated }: { id?: string; onCreated?: (ex
     <Label>Track by</Label><Row style={{ flexWrap: 'wrap', gap: 8 }}>{modes.map(mode => <Chip key={mode} title={{ weight: 'Weight + reps', reps: 'Reps', seconds: 'Seconds', cardio: 'Minutes + km' }[mode]} selected={draft.mode === mode} onPress={() => setDraft({ ...draft, mode })} />)}</Row>
     <Chip title="Record per side" selected={draft.perSide} onPress={() => setDraft({ ...draft, perSide: !draft.perSide })} />
     <Input label="Your notes" placeholder="Setup or technique notes" multiline value={draft.notes} maxLength={4000} onChangeText={notes => setDraft({ ...draft, notes })} />
-    <Section title="Exercise image" /><Artwork exercise={draft} size={112} />
+    <Section title="Exercise image" /><Artwork exercise={{ ...draft, videoId: youtubeId(video), hideDefaultVideo: !video.trim() }} size={112} />
     <Row><View style={{ flex: 1 }}><Button title="Google Images" variant="secondary" icon={Search} disabled={!draft.name.trim()} onPress={() => openUrl(googleImagesUrl(draft), nav.toast)} /></View><View style={{ flex: 1 }}><Button title="Choose image" variant="secondary" icon={ImagePlus} onPress={() => void safely(chooseImage, nav.toast)} /></View></Row>
     <T muted style={{ fontSize: 12, lineHeight: 19 }}>Find an image you can use, save it to Photos, then choose it here.</T>
-    <Input label="YouTube video" placeholder="Paste a YouTube link" autoCapitalize="none" autoCorrect={false} value={video} onChangeText={setVideo} />
+    {draft.image && <Button title="Use tutorial image" small variant="ghost" onPress={() => setDraft(current => ({ ...current, image: undefined }))} />}
+    <Input label="YouTube video" placeholder="Paste a YouTube link" autoCapitalize="none" autoCorrect={false} value={video} onChangeText={value => { setVideo(value); setVideoChange('manual'); }} />
+    {defaultTutorials[draft.id] && <Button title="Use default tutorial" variant="secondary" onPress={() => {
+      const selected = defaultTutorials[draft.id]!;
+      setVideo(`https://youtu.be/${selected.videoId}`);
+      setVideoChange('automatic');
+      setDraft(current => ({ ...current, ...selected, videoSource: 'automatic', hideDefaultVideo: false, videoFetchedAt: undefined }));
+    }} />}
     <Button title={busy ? 'Finding…' : 'Auto-find short video'} icon={Sparkles} variant="secondary" disabled={!draft.name.trim() || busy} onPress={() => void safely(async () => {
       setBusy(true);
       try {
         const key = await getSecret('youtube-key');
         const result = await findTutorial(draft, key ?? '');
         setVideo(`https://youtu.be/${result.videoId}`);
-        setDraft(current => ({ ...current, ...result }));
+        setVideoChange('automatic');
+        setDraft(current => ({ ...current, ...result, videoSource: 'automatic', hideDefaultVideo: false }));
       } finally { setBusy(false); }
     }, nav.toast)} />
   </Sheet>;

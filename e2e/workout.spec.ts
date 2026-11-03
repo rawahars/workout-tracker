@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { seedState } from '../src/seed';
+import { defaultTutorials } from '../src/default-tutorials';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -142,4 +143,90 @@ test('restores a portable backup with an exercise image and rejects a broken bac
   await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
   await (await invalid).setFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{"version":99}') });
   await expect(page.getByText(/not a valid FORM v1 backup/)).toBeVisible();
+});
+test.describe('exercise media', () => {
+  // WebKit can bypass network fixtures through an active service worker.
+  test.use({ serviceWorkers: 'block' });
+test('shows default exercise media without a key and logs treadmill time and distance', async ({ page }) => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+  await page.route('https://i.ytimg.com/**', route => route.fulfill({ contentType: 'image/png', body: png }));
+  await page.route('https://www.youtube.com/embed/**', route => route.fulfill({ contentType: 'text/html', body: '<html><body>Embedded tutorial</body></html>' }));
+  let apiCalls = 0;
+  page.on('request', request => { if (request.url().startsWith('https://www.googleapis.com/youtube/')) apiCalls++; });
+  await page.getByRole('tab', { name: 'Explore tab' }).click();
+  await page.getByRole('textbox', { name: 'Search exercises' }).fill('Flat dumbbell');
+  await expect(page.getByRole('img', { name: 'Flat dumbbell chest press preview', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'View Flat dumbbell chest press', exact: true }).click();
+  await expect(page.getByText(defaultTutorials['db-bench']!.videoTitle, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Play exercise tutorial', exact: true }).click();
+  await expect(page.locator('iframe[title="Exercise tutorial"]')).toHaveAttribute('src', `https://www.youtube.com/embed/${defaultTutorials['db-bench']!.videoId}`);
+  expect(apiCalls).toBe(0);
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('tab', { name: 'Today tab' }).click();
+  await page.getByRole('button', { name: 'Start freestyle workout' }).click();
+  await page.getByRole('button', { name: 'Add exercise', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search exercises' }).fill('Treadmill');
+  await page.getByRole('button', { name: 'Select Treadmill', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Treadmill set 1 minutes', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Treadmill set 1 km', exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Complete Treadmill set 2', exact: true })).toHaveCount(0);
+});
+test('refreshes media on each reload using the entered key and keeps manual media and keys out of backups', async ({ page }) => {
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+  await page.route('https://i.ytimg.com/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from(png.split(',')[1]!, 'base64') }));
+  const state = structuredClone(seedState());
+  state.exercises = state.exercises.filter(e => e.id !== 'treadmill').map(e => ({ ...e, hideDefaultVideo: true }));
+  state.exercises[0] = { ...state.exercises[0]!, image: 'chosen_image', videoId: 'abcdefghijk', videoSource: 'automatic', hideDefaultVideo: false };
+  state.exercises[1] = { ...state.exercises[1]!, videoId: 'ABCDEFGHIJK', videoTitle: 'My manually chosen tutorial', videoSource: 'manual', hideDefaultVideo: false };
+  state.exercises[2] = { ...state.exercises[2]!, videoId: '12345678901', videoSource: 'automatic', hideDefaultVideo: false };
+  const backup = { app: 'FORM', version: 1, createdAt: new Date().toISOString(), state, images: { chosen_image: png } };
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await (await chooser).setFiles({ name: 'old-library.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Replace with this backup', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Today tab' })).toBeVisible();
+  const requests: { query: string; key?: string }[] = [];
+  let round = 1;
+  await page.route('https://www.googleapis.com/youtube/v3/search?**', async route => {
+    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'x-goog-api-key', 'access-control-allow-methods': 'GET, OPTIONS' };
+    if (route.request().method() === 'OPTIONS') { await route.fulfill({ status: 204, headers }); return; }
+    requests.push({ query: new URL(route.request().url()).searchParams.get('q')!, key: (await route.request().allHeaders())['x-goog-api-key'] });
+    await route.fulfill({ contentType: 'application/json', headers, body: JSON.stringify({ items: [{ id: { videoId: round === 1 ? 'dQw4w9WgXcQ' : 'abcdefghijk' }, snippet: { title: `Refreshed tutorial ${round}` } }] }) });
+  });
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  await page.getByLabel('YouTube API key', { exact: true }).fill('test-user-provided-key');
+  await page.getByRole('button', { name: 'Use key for this browser session', exact: true }).click();
+  await expect(page.getByText('Key saved. Reload the page to refresh exercise media.', { exact: true })).toBeVisible();
+  expect(requests).toHaveLength(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  await expect(page.getByText('3 tutorials updated', { exact: true })).toBeVisible();
+  expect(requests).toHaveLength(3);
+  expect(requests.every(request => request.key === 'test-user-provided-key')).toBe(true);
+  expect(requests.some(request => request.query.includes('Vertical chest press'))).toBe(false);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export backup', exact: true }).click();
+  const stream = await (await download).createReadStream();
+  const buffers: Buffer[] = [];
+  for await (const chunk of stream!) buffers.push(chunk);
+  const raw = Buffer.concat(buffers).toString('utf8');
+  const exported = JSON.parse(raw);
+  expect(raw).not.toContain('test-user-provided-key');
+  expect(exported.state.exercises[0].videoId).toBe('dQw4w9WgXcQ');
+  expect(exported.state.exercises[1].videoId).toBe('ABCDEFGHIJK');
+  expect(exported.images[exported.state.exercises[0].image]).toBe(png);
+  expect(exported.state.exercises.some((exercise: { id: string }) => exercise.id === 'treadmill')).toBe(true);
+  round = 2;
+  await page.reload();
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  await expect(page.getByText('3 tutorials updated', { exact: true })).toBeVisible();
+  expect(requests).toHaveLength(6);
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.getByRole('tab', { name: 'Explore tab' }).click();
+  await page.getByRole('textbox', { name: 'Search exercises' }).fill('Flat dumbbell');
+  await page.getByRole('button', { name: 'View Flat dumbbell chest press', exact: true }).click();
+  await expect(page.getByText('Refreshed tutorial 2', { exact: true })).toBeVisible();
+});
 });

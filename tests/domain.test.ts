@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { StateSchema, localDay, validDay } from '../src/model';
-import { seedState } from '../src/seed';
+import { seedState, upgradeLibrary } from '../src/seed';
 import { alternatives, completedSets, finishSession, previousSets, sessionExercise, startSession, validateLoggedSet, volume, weekDays } from '../src/domain';
 
 function state() { return structuredClone(seedState()); }
@@ -69,6 +69,31 @@ describe('workout lifecycle', () => {
     expect(result.active!.workoutId).toBeUndefined();
     expect(result.active!.programId).toBeUndefined();
     expect(result.active!.exercises).toHaveLength(0);
+  });
+  it('adds treadmill to existing libraries without changing selected media or workout history', () => {
+    const initial = completed();
+    initial.exercises = initial.exercises.filter(e => e.id !== 'treadmill');
+    initial.exercises[0] = { ...initial.exercises[0]!, image: 'chosen_image', videoId: 'dQw4w9WgXcQ' };
+    const history = structuredClone(initial.sessions);
+    const upgraded = upgradeLibrary(initial);
+    expect(upgraded.exercises.find(e => e.id === 'treadmill')?.mode).toBe('cardio');
+    expect(upgraded.exercises[0]!.image).toBe('chosen_image');
+    expect(upgraded.exercises[0]!.videoId).toBe('dQw4w9WgXcQ');
+    expect(upgraded.sessions).toEqual(history);
+    expect(upgradeLibrary(upgraded)).toBe(upgraded);
+    const treadmill = sessionExercise(upgraded, upgraded.exercises.find(e => e.id === 'treadmill')!);
+    expect(treadmill.sets).toHaveLength(1);
+    expect(treadmill.sets[0]!.seconds).toBe(1200);
+  });
+  it('corrects the confirmed plank pass-through without rewriting renamed custom variations', () => {
+    const initial = state();
+    const index = initial.exercises.findIndex(e => e.id === 'pass-through');
+    initial.exercises[index] = { ...initial.exercises[index]!, name: 'Dumbbell pass-through', muscle: 'Shoulders', pattern: 'Mobility', perSide: false };
+    const upgraded = upgradeLibrary(initial);
+    expect(upgraded.exercises[index]!.name).toBe('Plank dumbbell pass-through');
+    expect(upgraded.exercises[index]!.muscle).toBe('Core');
+    initial.exercises[index]!.name = 'My shoulder drill';
+    expect(upgradeLibrary(initial).exercises[index]!.name).toBe('My shoulder drill');
   });
   it('validates completed rep and duration sets while allowing zero external load', () => {
     const initial = state();

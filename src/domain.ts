@@ -29,7 +29,7 @@ export function previousSets(state: State, exerciseId: string): LoggedSet[] {
 }
 export function sessionExercise(state: State, exercise: Exercise, rx?: Prescription): SessionExercise {
   const previous = previousSets(state, exercise.id);
-  const count = rx ? (state.settings.returnMode ? Math.min(2, rx.sets) : rx.sets) : 2;
+  const count = rx ? (state.settings.returnMode ? Math.min(2, rx.sets) : rx.sets) : exercise.mode === 'cardio' ? 1 : 2;
   return {
     id: uid(), exerciseId: exercise.id, name: exercise.name, muscle: exercise.muscle,
     mode: exercise.mode, perSide: exercise.perSide, target: targetFor(exercise, rx), rest: rx?.rest ?? 90,

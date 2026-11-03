@@ -7,7 +7,7 @@ import { CalendarDays, ChartNoAxesCombined, House, LayoutGrid, LucideIcon, Play,
 import { Tab } from './src/model';
 import { uid } from './src/domain';
 import { boot, bootFailure, recoverPrevious, useStore } from './src/store';
-import { chooseTextFile, exportText, readSnapshot } from './src/platform';
+import { chooseTextFile, exportText, getSecret, readSnapshot } from './src/platform';
 import { parseBackup } from './src/backup';
 import { TodayScreen, CalendarScreen, ProgressScreen } from './src/overview-screens';
 import { RoutinesScreen } from './src/routine-screens';
@@ -15,6 +15,7 @@ import { ExploreScreen } from './src/exercise-screens';
 import { SessionScreen } from './src/session-screens';
 import { RestorePreview, SettingsScreen } from './src/settings-screen';
 import { initializePwa } from './src/pwa';
+import { refreshExerciseMedia } from './src/media-refresh';
 import { Button, C, IconButton, Label, NavigationContext, Row, T, fonts, safely, useNav } from './src/ui';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
@@ -62,7 +63,10 @@ function Application() {
   const [offlineReady, setOfflineReady] = useState(false);
   useEffect(() => { if (!message) return; const timer = setTimeout(() => setMessage(''), 5500); return () => clearTimeout(timer); }, [message]);
   useEffect(() => {
-    void boot().then(() => setReady(true));
+    void boot().then(() => {
+      setReady(true);
+      if (!bootFailure()) void getSecret('youtube-key').then(key => { if (key) void refreshExerciseMedia(key); }).catch(() => undefined);
+    });
     void initializePwa().then(setOfflineReady).catch(() => setMessage('Offline setup could not finish. Open the app online once before using it offline.'));
   }, []);
   const nav = {

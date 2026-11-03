@@ -7,6 +7,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { Exercise, Session } from './model';
 import { imageData } from './platform';
+import { thumbnailFor } from './media';
 import { completedSets, formatTime, shortDate, volume, fmt } from './domain';
 
 export const C = { bg: '#101411', card: '#1A201C', raised: '#232B25', line: '#303A32', text: '#F3F6EF', muted: '#A6B0A6', lime: '#C7F36B', purple: '#B4A0FF', cyan: '#73D9E7', orange: '#F6BE83', danger: '#FF9C99' };
@@ -85,6 +86,7 @@ export function Empty({ title, description, icon: Icon = Dumbbell }: { title: st
 }
 export const Artwork = memo(function Artwork({ exercise, size = 56 }: { exercise: Exercise; size?: number }) {
   const [loaded, setLoaded] = useState<{ key: string; uri?: string }>();
+  const [failedImages, setFailedImages] = useState<string[]>([]);
   useEffect(() => {
     let active = true;
     if (exercise.image) {
@@ -93,9 +95,10 @@ export const Artwork = memo(function Artwork({ exercise, size = 56 }: { exercise
     }
     return () => { active = false; };
   }, [exercise.image]);
-  const uri = loaded?.key === exercise.image ? loaded?.uri : undefined;
+  const custom = loaded?.key === exercise.image ? loaded?.uri : undefined;
+  const uri = [custom, thumbnailFor(exercise)].find(value => value && !failedImages.includes(value));
   const color = ['Quads', 'Hamstrings', 'Glutes', 'Calves'].includes(exercise.muscle) ? C.purple : exercise.muscle === 'Core' ? C.cyan : C.lime;
-  if (uri) return <Image accessibilityLabel={exercise.name} source={{ uri }} style={{ width: size, height: size, borderRadius: size * 0.25 }} />;
+  if (uri) return <Image accessibilityLabel={`${exercise.name} preview`} source={{ uri }} resizeMode="cover" onError={() => setFailedImages(current => current.includes(uri) ? current : [...current, uri])} style={{ width: size, height: size, borderRadius: size * 0.25 }} />;
   return <View style={{ width: size, height: size, borderRadius: size * 0.25, overflow: 'hidden', backgroundColor: `${color}12` }}>
     <Svg width={size} height={size} viewBox="0 0 100 100">
       <Circle cx="50" cy="50" r="37" fill="none" stroke={color} strokeOpacity={0.12} />
