@@ -54,6 +54,87 @@ test('counts sessions within two hours as a workout and groups recent sessions b
   await expect(page.getByTestId('recent-day-2026-11-03').getByRole('button')).toHaveCount(2);
   await expect(page.getByTestId('recent-day-2026-11-02').getByRole('button')).toHaveCount(1);
 });
+test('charts daily training minutes while preserving primary-muscle set totals', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-03T12:00:00') });
+  await page.getByRole('tab', { name: 'Progress tab' }).click();
+  const chart = page.getByTestId('weekly-training-time');
+  await expect(chart.getByText('Minutes', { exact: true })).toBeVisible();
+  await expect(chart.getByText('0', { exact: true })).toHaveCount(7);
+  const state = seedState();
+  function logged(day: string, start: string, duration: number): Session {
+    const active = startSession(state, state.workouts[0], day, new Date(start).getTime());
+    active.active!.exercises[0]!.sets[0]!.done = true;
+    return finishSession(active, active.active!.startedAt + duration * 1000).sessions[0]!;
+  }
+  state.sessions = [
+    logged('2026-10-27', '2026-10-27T08:00:00', 80 * 60),
+    logged('2026-11-02', '2026-11-02T08:00:00', 20 * 60 + 30),
+    logged('2026-11-02', '2026-11-02T11:00:00', 24 * 60 + 30),
+    logged('2026-11-03', '2026-11-03T08:00:00', 75 * 60),
+  ];
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await (await chooser).setFiles({ name: 'training-time.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ app: 'FORM', version: 1, createdAt: new Date().toISOString(), state, images: {} })) });
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Replace with this backup', exact: true }).click();
+  await page.getByRole('tab', { name: 'Progress tab' }).click();
+  await expect(chart.getByText('45', { exact: true })).toBeVisible();
+  await expect(chart.getByText('75', { exact: true })).toBeVisible();
+  await expect(chart.getByText('0', { exact: true })).toHaveCount(5);
+  await expect(chart.getByText('Sets', { exact: true })).toHaveCount(0);
+  const muscleChart = page.getByText('This week · primary-muscle sets', { exact: true }).locator('..');
+  await expect(muscleChart.getByText(state.sessions[0]!.exercises[0]!.muscle, { exact: true })).toBeVisible();
+  await expect(muscleChart.getByText('3', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Progress tab' }).click();
+  await expect(chart.getByText('45', { exact: true })).toBeVisible();
+  await expect(chart.getByText('75', { exact: true })).toBeVisible();
+});
+test('marks the scheduled workout finished only after its matching session is saved', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-03T12:00:00') });
+  const state = seedState();
+  const program = state.programs.find(p => p.id === state.settings.programId)!;
+  const workoutId = program.slots.find(slot => slot.day === 2)!.workoutId;
+  const workout = state.workouts.find(w => w.id === workoutId)!;
+  function logged(id: string, day: string, start: string): Session {
+    const active = startSession(state, state.workouts.find(w => w.id === id), day, new Date(start).getTime());
+    active.active!.exercises[0]!.sets[0]!.done = true;
+    return finishSession(active, active.active!.startedAt + 30 * 60000).sessions[0]!;
+  }
+  state.sessions = [
+    logged(workout.id, '2026-11-02', '2026-11-02T08:00:00'),
+    logged(state.workouts.find(w => w.id !== workout.id)!.id, '2026-11-03', '2026-11-03T08:00:00'),
+  ];
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await (await chooser).setFiles({ name: 'scheduled-completion.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ app: 'FORM', version: 1, createdAt: new Date().toISOString(), state, images: {} })) });
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Replace with this backup', exact: true }).click();
+  await expect(page.getByRole('button', { name: "View today's workout", exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: "Start today's workout", exact: true }).click();
+  const firstSet = page.getByRole('checkbox').first();
+  await firstSet.click();
+  await expect(firstSet).toBeChecked();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Finish workout', exact: true }).click();
+  await expect(page.getByText('Work recorded', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await expect(page.getByText('Finished today', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: "Start today's workout", exact: true })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: "View today's workout", exact: true }).click();
+  await expect(page.getByText('Training log', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Session name', exact: true })).toHaveValue(workout.name);
+  await expect(page.getByRole('button', { name: 'Finish workout', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.clock.setSystemTime(new Date('2026-11-10T12:00:00'));
+  await page.getByRole('tab', { name: 'Routines tab' }).click();
+  await page.getByRole('tab', { name: 'Today tab' }).click();
+  await expect(page.getByRole('button', { name: "Start today's workout", exact: true })).toBeVisible();
+  await expect(page.getByText('Finished today', { exact: true })).toHaveCount(0);
+});
 test('countdown pauses, rings once, and survives reload without losing the session', async ({ page }) => {
   await page.addInitScript(() => {
     const probe = window as unknown as { __timerBeeps: number };

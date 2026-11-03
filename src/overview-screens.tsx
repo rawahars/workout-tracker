@@ -14,6 +14,9 @@ export function TodayScreen() {
   const today = localDay();
   const program = state.programs.find(p => p.id === state.settings.programId);
   const scheduled = program?.slots.filter(slot => slot.day === new Date().getDay()).flatMap(slot => state.workouts.find(w => w.id === slot.workoutId) ?? []) ?? [];
+  const workout = scheduled[0];
+  const completedToday = workout ? state.sessions.filter(s => s.day === today && s.workoutId === workout.id)
+    .sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt))[0] : undefined;
   const weekly = weeklySessions(state);
   const trained = new Set(weekly.map(s => s.day));
   const recent = [...state.sessions].sort((a, b) => b.day.localeCompare(a.day) || b.startedAt - a.startedAt).slice(0, 3);
@@ -32,12 +35,12 @@ export function TodayScreen() {
       <T style={{ fontFamily: fonts.display, fontSize: 29 }}>{state.active.name}</T>
       <T muted>{completedSets(state.active)} completed sets · Saved on your device</T>
       <Button title="Resume workout" icon={Play} onPress={() => nav.open(<SessionScreen />)} />
-    </Hero> : scheduled.length ? <Hero color={scheduled[0]!.color}>
-      <Row style={{ justifyContent: 'space-between' }}><Label color={scheduled[0]!.color}>{program?.name}</Label><Dumbbell size={22} color={scheduled[0]!.color} /></Row>
-      <View style={{ gap: 8 }}><T style={{ fontFamily: fonts.display, fontSize: 30 }}>{scheduled[0]!.name}</T><T muted>{scheduled[0]!.subtitle}</T></View>
-      <Row style={{ gap: 20 }}><T style={{ color: scheduled[0]!.color, fontFamily: fonts.bold }}>{scheduled[0]!.minutes} min</T><T muted>{scheduled[0]!.exercises.length} exercises</T></Row>
-      <Button title="Start today's workout" icon={Play} onPress={() => void safely(() => launchWorkout(scheduled[0], nav, today, program?.id), nav.toast)} />
-      <Pressable accessibilityRole="button" onPress={() => nav.open(<WorkoutDetail id={scheduled[0]!.id} programId={program?.id} />)}><T style={{ color: C.muted, textAlign: 'center', fontSize: 12 }}>Preview workout</T></Pressable>
+    </Hero> : workout ? <Hero color={workout.color}>
+      <Row style={{ justifyContent: 'space-between' }}><Label color={workout.color}>{completedToday ? 'Finished today' : program?.name}</Label>{completedToday ? <Check size={22} color={workout.color} /> : <Dumbbell size={22} color={workout.color} />}</Row>
+      <View style={{ gap: 8 }}><T style={{ fontFamily: fonts.display, fontSize: 30 }}>{workout.name}</T><T muted>{workout.subtitle}</T></View>
+      <Row style={{ gap: 20 }}><T style={{ color: workout.color, fontFamily: fonts.bold }}>{completedToday ? Math.round((completedToday.duration ?? 0) / 60) : workout.minutes} min</T><T muted>{completedToday?.exercises.length ?? workout.exercises.length} exercises</T></Row>
+      <Button title={completedToday ? "View today's workout" : "Start today's workout"} icon={completedToday ? Check : Play} onPress={() => completedToday ? nav.open(<SessionScreen id={completedToday.id} />) : void safely(() => launchWorkout(workout, nav, today, program?.id), nav.toast)} />
+      <Pressable accessibilityRole="button" onPress={() => nav.open(<WorkoutDetail id={workout.id} programId={program?.id} />)}><T style={{ color: C.muted, textAlign: 'center', fontSize: 12 }}>Preview workout</T></Pressable>
     </Hero> : <Hero color={C.cyan}>
       <Label color={C.cyan}>Space to recover</Label><T style={{ fontFamily: fonts.display, fontSize: 28 }}>No workout scheduled.</T><T muted style={{ lineHeight: 22 }}>Take it easy, or start a session of your own.</T><Button title="Start freestyle workout" icon={Plus} onPress={() => void safely(() => launchWorkout(undefined, nav), nav.toast)} />
     </Hero>}
@@ -98,8 +101,8 @@ export function ProgressScreen() {
   const state = useStore(), nav = useNav();
   const analysis = analyze(state);
   const days = weekDays();
-  const counts = days.map(day => state.sessions.filter(s => s.day === day).reduce((sum, s) => sum + completedSets(s), 0));
-  const highest = Math.max(1, ...counts);
+  const minutes = days.map(day => Math.round(state.sessions.filter(s => s.day === day).reduce((sum, s) => sum + (s.duration ?? 0), 0) / 60));
+  const highest = Math.max(1, ...minutes);
   const [selectedExercise, setSelectedExercise] = useState<string>();
   const selection = analysis.records.find(r => r.exercise.id === selectedExercise) ?? analysis.records[0];
   const history = selection ? [...state.sessions].sort((a, b) => a.day.localeCompare(b.day) || a.startedAt - b.startedAt)
@@ -110,9 +113,9 @@ export function ProgressScreen() {
   return <ScrollView contentContainerStyle={{ padding: 22, gap: 16, paddingBottom: 35 }}>
     <View style={{ gap: 7 }}><Label color={C.lime}>Small wins. Real progress.</Label><T style={{ fontFamily: fonts.display, fontSize: 32 }}>See the work.</T></View>
     <Card><Row><Stat label="Total sessions" value={String(state.sessions.length)} /><Stat label="Total completed sets" value={fmt(state.sessions.reduce((sum, session) => sum + completedSets(session), 0))} color={C.lime} /></Row></Card>
-    <Card style={{ gap: 20 }}>
-      <Row style={{ justifyContent: 'space-between' }}><T style={{ fontFamily: fonts.display, fontSize: 19 }}>This week&apos;s work</T><Label>Sets</Label></Row>
-      <Row style={{ height: 137, gap: 10, alignItems: 'flex-end' }}>{days.map((day, index) => <View key={day} style={{ flex: 1, alignItems: 'center', gap: 10 }}><T muted style={{ fontSize: 10 }}>{counts[index]}</T><View style={{ width: '100%', maxWidth: 35, height: Math.max(4, counts[index]! / highest * 85), borderRadius: 7, backgroundColor: day === localDay() ? C.lime : counts[index] ? '#617B43' : C.raised }} /><T muted style={{ fontSize: 10 }}>{weekdayNames[new Date(`${day}T12:00:00`).getDay()]?.slice(0, 1)}</T></View>)}</Row>
+    <Card testID="weekly-training-time" style={{ gap: 20 }}>
+      <Row style={{ justifyContent: 'space-between' }}><T style={{ fontFamily: fonts.display, fontSize: 19 }}>This week&apos;s work</T><Label>Minutes</Label></Row>
+      <Row style={{ height: 137, gap: 10, alignItems: 'flex-end' }}>{days.map((day, index) => <View key={day} style={{ flex: 1, alignItems: 'center', gap: 10 }}><T muted style={{ fontSize: 10 }}>{minutes[index]}</T><View style={{ width: '100%', maxWidth: 35, height: Math.max(4, minutes[index]! / highest * 85), borderRadius: 7, backgroundColor: day === localDay() ? C.lime : minutes[index] ? '#617B43' : C.raised }} /><T muted style={{ fontSize: 10 }}>{weekdayNames[new Date(`${day}T12:00:00`).getDay()]?.slice(0, 1)}</T></View>)}</Row>
     </Card>
     <Section title="Training insights" />
     {analysis.insights.map((insight, i) => <Card key={i}><Row style={{ alignItems: 'flex-start' }}><View style={{ width: 6, height: 6, marginTop: 7, borderRadius: 3, backgroundColor: C.lime }} /><T style={{ flex: 1, lineHeight: 22 }}>{insight}</T></Row></Card>)}
